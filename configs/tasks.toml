@@ -1,0 +1,16 @@
+[tool.poe.tasks]
+
+uv-sync = "uv sync --all-groups"
+
+check-python = 'tb check python'
+check-types = 'tb check basedpyright'
+check-complexity = 'tb check complexity'
+check-coverage = 'tb check coverage'
+check-prettier = 'tb check prettier'
+ci-checks.sequence = [
+    'check-python',
+    'check-types',
+    'check-complexity',
+    'check-coverage',
+    'check-prettier',
+]
