@@ -1,0 +1,53 @@
+"""Auto-generated SQLAlchemy model for {{ table_name }} table.
+
+This file was automatically generated from the F3 Nation database schema.
+Generated on: {{ timestamp }}
+
+DO NOT EDIT MANUALLY - Use dev_utilities/generate_models.py to regenerate.
+Auto-formatted with toolbelt for consistent code style.
+"""
+{%- if needs_any %}
+from typing import Any
+{%- endif %}
+
+import sqlalchemy as sa
+{%- if needs_longtext %}
+from sqlalchemy.dialects.mysql import LONGTEXT
+{%- endif %}
+from sqlalchemy.orm import Mapped, mapped_column
+{%- if needs_date %}
+from datetime import date
+{%- endif %}
+{%- if needs_datetime %}
+from datetime import datetime
+{%- endif %}
+
+from .base import Base
+
+
+class {{ class_name }}(Base):
+    """SQLAlchemy model for {{ table_name }} table.
+
+    Auto-generated from F3 Nation database schema.
+
+    Table: {{ table_name }}
+    Primary Key: {{ primary_keys }}
+    """
+
+    __tablename__ = '{{ table_name }}'
+{% for column in columns %}
+    {{ column.name }}: Mapped[{{ column.python_type }}] = mapped_column(
+        {{ column.sa_type }},
+{%- if column.is_pk %}
+        primary_key=True,
+{%- endif %}
+        nullable={{ column.nullable }},
+{%- if column.default_value %}
+        default={{ column.default_value }},
+{%- endif %}
+    )
+{% endfor %}
+    def __repr__(self) -> str:
+        """Return string representation of the model."""
+        return f'<{{ class_name }}({{ repr_format }})>'
+
