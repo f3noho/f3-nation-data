@@ -14,29 +14,27 @@ from f3_nation_data.database import (
 )
 
 
-def test_get_required_env_success(mocker: MockerFixture) -> None:
-    """Test getting an existing environment variable."""
+def test_get_required_env(mocker: MockerFixture) -> None:
+    """Test environment variable retrieval utility."""
+    # Test successful retrieval
     mocker.patch.dict('os.environ', {'TEST_VAR': 'test_value'})
     result = _get_required_env('TEST_VAR', 'Error message')
     assert result == 'test_value'
 
-
-def test_get_required_env_missing(mocker: MockerFixture) -> None:
-    """Test error when environment variable is missing."""
+    # Test missing variable
     mocker.patch.dict('os.environ', {}, clear=True)
     with pytest.raises(ValueError, match='Custom error message'):
         _get_required_env('MISSING_VAR', 'Custom error message')
 
-
-def test_get_required_env_empty_string(mocker: MockerFixture) -> None:
-    """Test error when environment variable is empty string."""
+    # Test empty string
     mocker.patch.dict('os.environ', {'EMPTY_VAR': ''})
     with pytest.raises(ValueError, match='Variable is empty'):
         _get_required_env('EMPTY_VAR', 'Variable is empty')
 
 
-def test_get_sql_engine_with_parameters() -> None:
-    """Test engine creation with direct parameters."""
+def test_get_sql_engine_parameters_and_env_vars(mocker: MockerFixture) -> None:
+    """Test engine creation with direct parameters and environment variables."""
+    # Test with direct parameters
     engine = get_sql_engine(
         user='test_user',
         password='test_password',  # noqa: S106 - madeup test password
@@ -46,16 +44,13 @@ def test_get_sql_engine_with_parameters() -> None:
     )
 
     assert isinstance(engine, Engine)
-    # Check that the connection string is correct
     url = str(engine.url)
     assert 'test_user' in url
     assert 'localhost' in url
     assert 'test_db' in url
     assert '3306' in url
 
-
-def test_get_sql_engine_with_env_vars(mocker: MockerFixture) -> None:
-    """Test engine creation using environment variables."""
+    # Test with environment variables
     env_vars = {
         'F3_NATION_USER': 'env_user',
         'F3_NATION_PASSWORD': 'env_password',
@@ -113,48 +108,25 @@ def test_get_sql_engine_default_port(mocker: MockerFixture) -> None:
     assert '3306' in url
 
 
-def test_get_sql_engine_missing_user(mocker: MockerFixture) -> None:
-    """Test error when username is missing."""
+def test_get_sql_engine_missing_required_params(mocker: MockerFixture) -> None:
+    """Test error when required parameters are missing."""
     mocker.patch.dict('os.environ', {}, clear=True)
+
+    # Test missing username
     with pytest.raises(ValueError, match='Database username required'):
-        get_sql_engine(
-            password='password123',  # noqa: S106 - madeup test password
-            host='host',
-            database='db',
-        )
+        get_sql_engine(password='pass', host='host', database='db')  # noqa: S106
 
-
-def test_get_sql_engine_missing_password(mocker: MockerFixture) -> None:
-    """Test error when password is missing."""
-    mocker.patch.dict('os.environ', {}, clear=True)
+    # Test missing password
     with pytest.raises(ValueError, match='Database password required'):
-        get_sql_engine(
-            user='user',
-            host='host',
-            database='db',
-        )
+        get_sql_engine(user='user', host='host', database='db')
 
-
-def test_get_sql_engine_missing_host(mocker: MockerFixture) -> None:
-    """Test error when host is missing."""
-    mocker.patch.dict('os.environ', {}, clear=True)
+    # Test missing host
     with pytest.raises(ValueError, match='Database host required'):
-        get_sql_engine(
-            user='user',
-            password='password123',  # noqa: S106 - madeup test password
-            database='db',
-        )
+        get_sql_engine(user='user', password='pass', database='db')  # noqa: S106
 
-
-def test_get_sql_engine_missing_database(mocker: MockerFixture) -> None:
-    """Test error when database is missing."""
-    mocker.patch.dict('os.environ', {}, clear=True)
+    # Test missing database
     with pytest.raises(ValueError, match='Database name required'):
-        get_sql_engine(
-            user='user',
-            password='password123',  # noqa: S106 - madeup test password
-            host='host',
-        )
+        get_sql_engine(user='user', password='pass', host='host')  # noqa: S106
 
 
 def test_create_session(f3_test_database: Engine) -> None:
@@ -171,14 +143,15 @@ def test_create_session(f3_test_database: Engine) -> None:
     session.close()
 
 
-def test_db_session_success(
+def test_db_session_functionality(
     mocker: MockerFixture,
     f3_test_database: Engine,
 ) -> None:
-    """Test successful database session context manager."""
+    """Test database session context manager functionality."""
     mock_get_engine = mocker.patch.object(database, 'get_sql_engine')
     mock_get_engine.return_value = f3_test_database
 
+    # Test successful session
     with db_session(
         user='test',
         password='test',  # noqa: S106 - madeup test password
@@ -188,6 +161,25 @@ def test_db_session_success(
         assert isinstance(session, Session)
         result = session.execute(text('SELECT 1 as test')).scalar()
         assert result == 1
+
+    # Test that parameters are passed correctly
+    with db_session(
+        user='test_user',
+        password='test_pass',  # noqa: S106 - madeup test password
+        host='test_host',
+        database='test_db',
+        port=3307,
+    ):
+        pass
+
+    # Verify the last call had the correct parameters
+    mock_get_engine.assert_called_with(
+        'test_user',
+        'test_pass',
+        'test_host',
+        'test_db',
+        3307,
+    )
 
 
 def test_db_session_rollback_on_exception(
@@ -200,7 +192,7 @@ def test_db_session_rollback_on_exception(
 
     test_error_msg = 'Test error'
 
-    def _test_context_with_error() -> None:
+    def _raise_in_session() -> None:
         with db_session(
             user='test',
             password='test',  # noqa: S106 - madeup test password
@@ -211,30 +203,4 @@ def test_db_session_rollback_on_exception(
             raise ValueError(test_error_msg)
 
     with pytest.raises(ValueError, match=test_error_msg):
-        _test_context_with_error()
-
-
-def test_db_session_passes_parameters(
-    mocker: MockerFixture,
-    f3_test_database: Engine,
-) -> None:
-    """Test that db_session passes parameters to get_sql_engine."""
-    mock_get_engine = mocker.patch.object(database, 'get_sql_engine')
-    mock_get_engine.return_value = f3_test_database
-
-    with db_session(
-        user='test_user',
-        password='test_pass',  # noqa: S106 - madeup test password
-        host='test_host',
-        database='test_db',
-        port=3307,
-    ):
-        pass
-
-    mock_get_engine.assert_called_once_with(
-        'test_user',
-        'test_pass',
-        'test_host',
-        'test_db',
-        3307,
-    )
+        _raise_in_session()
