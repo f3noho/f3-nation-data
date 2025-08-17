@@ -26,7 +26,7 @@ class WorkoutTypeTestCase:
                 Q: <@U123>
                 PAX: <@U456>
                 COUNT: 2
-                
+
                 WARMUP: SSH, Imperial Walkers
                 THANG: Dora 1-2-1
                 MARY: Crunches
@@ -43,7 +43,7 @@ class WorkoutTypeTestCase:
                 PAX: <@U456>
                 This was a great ruck march through downtown.
                 COUNT: 5
-                
+
                 We covered 3 miles with our rucksacks.
             """),
             'ruck',
@@ -70,7 +70,7 @@ class WorkoutTypeTestCase:
                 Q: <@U123>
                 PAX: <@U456>
                 COUNT: 4
-                
+
                 Some content here.
             """),
             'bootcamp',
@@ -84,7 +84,7 @@ class WorkoutTypeTestCase:
                 Q: <@U123>
                 PAX: <@U456>
                 COUNT: 4
-                
+
                 THANG: Main workout
             """),
             'bootcamp',
@@ -98,7 +98,7 @@ class WorkoutTypeTestCase:
                 Q: <@U123>
                 PAX: <@U456>
                 COUNT: 4
-                
+
                 WARMUP: SSH
             """),
             'bootcamp',

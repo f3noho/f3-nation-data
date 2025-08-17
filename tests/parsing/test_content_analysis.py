@@ -30,7 +30,7 @@ class WordCountTestCase:
                 Q: <@U123>
                 PAX: <@U456>
                 COUNT: 2
-                
+
                 This is the main content after count.
                 It has multiple words for testing purposes.
             """),
@@ -54,7 +54,7 @@ class WordCountTestCase:
                 DATE: 2024-03-09
                 Q: <@U123>
                 PAX: <@U456>
-                
+
                 This content should be counted entirely.
                 Multiple lines of text here.
             """),
@@ -87,13 +87,13 @@ class ContentCheckTestCase:
                 Q: <@U123>
                 PAX: <@U456>
                 COUNT: 2
-                
+
                 ANNOUNCEMENTS: Welcome new PAX!
                 COT: Prayers for healing.
             """),
-            True,
-            True,
-            'both_present',
+            has_announcements=True,
+            has_cot=True,
+            test_id='both_present',
         ),
         ContentCheckTestCase(
             dedent("""
@@ -102,12 +102,12 @@ class ContentCheckTestCase:
                 Q: <@U123>
                 PAX: <@U456>
                 COUNT: 2
-                
+
                 ANNOUNCEMENTS: Check the calendar.
             """),
-            True,
-            False,
-            'announcements_only',
+            has_announcements=True,
+            has_cot=False,
+            test_id='announcements_only',
         ),
         ContentCheckTestCase(
             dedent("""
@@ -116,12 +116,12 @@ class ContentCheckTestCase:
                 Q: <@U123>
                 PAX: <@U456>
                 COUNT: 2
-                
+
                 COT: Thoughts and prayers.
             """),
-            False,
-            True,
-            'cot_only',
+            has_announcements=False,
+            has_cot=True,
+            test_id='cot_only',
         ),
         ContentCheckTestCase(
             dedent("""
@@ -130,12 +130,12 @@ class ContentCheckTestCase:
                 Q: <@U123>
                 PAX: <@U456>
                 COUNT: 2
-                
+
                 Just the workout content.
             """),
-            False,
-            False,
-            'neither_present',
+            has_announcements=False,
+            has_cot=False,
+            test_id='neither_present',
         ),
         ContentCheckTestCase(
             dedent("""
@@ -144,13 +144,13 @@ class ContentCheckTestCase:
                 Q: <@U123>
                 PAX: <@U456>
                 COUNT: 2
-                
+
                 ANNOUNCEMENTS:
                 COT:
             """),
-            False,
-            False,
-            'empty_sections',
+            has_announcements=False,
+            has_cot=False,
+            test_id='empty_sections',
         ),
         ContentCheckTestCase(
             dedent("""
@@ -159,13 +159,13 @@ class ContentCheckTestCase:
                 Q: <@U123>
                 PAX: <@U456>
                 COUNT: 2
-                
+
                 ANNOUNCEMENTS: Great workout today!
                 COT: Thanks for the support.
             """),
-            True,
-            True,
-            'inline_content',
+            has_announcements=True,
+            has_cot=True,
+            test_id='inline_content',
         ),
     ],
     ids=lambda tcase: tcase.test_id,
@@ -193,7 +193,7 @@ class ExtractAfterCountTestCase:
                 Q: <@U123>
                 PAX: <@U456>
                 COUNT: 2
-                
+
                 This is after the count line.
                 Multiple lines here.
             """),
@@ -206,7 +206,7 @@ class ExtractAfterCountTestCase:
                 DATE: 2024-03-09
                 Q: <@U123>
                 PAX: <@U456>
-                
+
                 No count line present.
             """),
             None,
