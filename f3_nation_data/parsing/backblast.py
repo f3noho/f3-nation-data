@@ -331,7 +331,9 @@ def extract_after_count(text: str) -> str | None:
     return None
 
 
-def transform_sql_to_parsed_beatdown(sql_bd: SqlBeatDownModel) -> ParsedBeatdown:
+def transform_sql_to_parsed_beatdown(
+    sql_bd: SqlBeatDownModel,
+) -> ParsedBeatdown:
     """Transform a SQL beatdown row into a fully parsed App BeatDown model."""
     backblast = sql_bd.backblast or ''
     # Title: first line
@@ -347,8 +349,6 @@ def transform_sql_to_parsed_beatdown(sql_bd: SqlBeatDownModel) -> ParsedBeatdown
     mary = None
     announcements = None
     cot = None
-    # Use parsing utilities for all fields
-    import re
 
     q_match = re.search(r'^Q:\s*(.*)$', backblast, re.MULTILINE)
     if q_match:
@@ -383,7 +383,7 @@ def transform_sql_to_parsed_beatdown(sql_bd: SqlBeatDownModel) -> ParsedBeatdown
     pax_count = extract_pax_count(backblast)
     fng_count = extract_fng_count(backblast)
     return ParsedBeatdown(
-        timestamp=sql_bd.timestamp,
+        timestamp=sql_bd.timestamp or '',
         last_edited=sql_bd.ts_edited,
         raw_backblast=backblast,
         title=title,
@@ -406,6 +406,7 @@ def transform_sql_to_parsed_beatdown(sql_bd: SqlBeatDownModel) -> ParsedBeatdown
         pax_count=pax_count,
         fng_count=fng_count,
     )
+
 
 # Helper functions
 def _extract_section(text: str, section: str) -> str | None:

@@ -147,3 +147,9 @@ class DayOfWeekTestCase:
 def test_extract_day_of_week(tcase: DayOfWeekTestCase):
     """Test day of week calculation for known dates."""
     assert extract_day_of_week(tcase.date_str) == tcase.expected_day
+
+
+def test_extract_day_of_week_invalid_date():
+    """Test day of week extraction with invalid date."""
+    assert extract_day_of_week('invalid-date') is None
+    assert extract_day_of_week('2024-13-45') is None  # Invalid month and day

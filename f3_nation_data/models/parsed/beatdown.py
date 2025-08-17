@@ -55,7 +55,6 @@ class ParsedBeatdown(BaseModel):
         computation at display time.
     """
 
-
     # core beatdown identifiers
     timestamp: str
     last_edited: str | None = None

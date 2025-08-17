@@ -1,10 +1,10 @@
-from .sql import *
+from .sql import Base, SqlAOModel, SqlBeatDownModel, SqlUserModel
 
 __all__ = [
     # SQL models
     'Base',
-    'SqlBeatDownModel',
     'SqlAOModel',
+    'SqlBeatDownModel',
     'SqlUserModel',
     # App models (to be implemented)
     # 'BeatdownModel',
