@@ -7,10 +7,46 @@ and transforming SQL models into parsed application models.
 import datetime as dt
 import json
 import re
+from dataclasses import dataclass
 from datetime import datetime
 
 from f3_nation_data.models.parsed.beatdown import ParsedBeatdown
 from f3_nation_data.models.sql.beatdown import SqlBeatDownModel
+
+
+@dataclass
+class PeopleInfo:
+    """Information about people extracted from backblast."""
+
+    q_user_id: str | None = None
+    coq_user_id: list[str] | None = None
+    pax: list[str] | None = None
+    non_registered_pax: list[str] | None = None
+    fngs: list[str] | None = None
+
+
+@dataclass
+class ContentSections:
+    """Content sections extracted from backblast."""
+
+    warmup: str | None = None
+    thang: str | None = None
+    mary: str | None = None
+    announcements: str | None = None
+    cot: str | None = None
+
+
+@dataclass
+class AnalyticsData:
+    """Analytics data computed from backblast."""
+
+    workout_type: str
+    day_of_week: str | None
+    has_announcements: bool
+    has_cot: bool
+    word_count: int | None
+    pax_count: int
+    fng_count: int
 
 
 def extract_pax_from_string(pax_string: str) -> tuple[list[str], list[str]]:
@@ -139,7 +175,6 @@ def extract_bd_date(backblast: str) -> str | None:
     Returns:
         Date string in YYYY-MM-DD format, or None if not found.
     """
-    # Look for DATE: YYYY-MM-DD pattern
     date_patterns = [
         r'DATE:\s*(\d{4}-\d{2}-\d{2})',
         r'DATE:\s*(\d{4}/\d{2}/\d{2})',
@@ -151,27 +186,51 @@ def extract_bd_date(backblast: str) -> str | None:
         match = re.search(pattern, backblast)
         if match:
             date_str = match.group(1)
-            try:
-                # Try to parse and normalize to YYYY-MM-DD
-                if '/' in date_str:
-                    if date_str.startswith('20'):  # YYYY/MM/DD
-                        date_obj = datetime.strptime(
-                            date_str,
-                            '%Y/%m/%d',
-                        ).replace(tzinfo=dt.UTC)
-                    else:  # MM/DD/YYYY
-                        date_obj = datetime.strptime(
-                            date_str,
-                            '%m/%d/%Y',
-                        ).replace(tzinfo=dt.UTC)
-                else:  # YYYY-MM-DD
-                    date_obj = datetime.strptime(date_str, '%Y-%m-%d').replace(
-                        tzinfo=dt.UTC,
-                    )
-                return date_obj.strftime('%Y-%m-%d')
-            except ValueError:
-                continue
+            normalized_date = _normalize_date_string(date_str)
+            if normalized_date:
+                return normalized_date
     return None
+
+
+def _normalize_date_string(date_str: str) -> str | None:
+    """Normalize a date string to YYYY-MM-DD format.
+
+    Args:
+        date_str: Date string in various formats.
+
+    Returns:
+        Normalized date string or None if invalid.
+    """
+    try:
+        if '/' in date_str:
+            return _parse_slash_date(date_str)
+        # YYYY-MM-DD format
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d').replace(
+            tzinfo=dt.UTC,
+        )
+        return date_obj.strftime('%Y-%m-%d')
+    except ValueError:
+        return None
+
+
+def _parse_slash_date(date_str: str) -> str:
+    """Parse date string with slash separators.
+
+    Args:
+        date_str: Date string with / separators.
+
+    Returns:
+        Normalized date string in YYYY-MM-DD format.
+    """
+    if date_str.startswith('20'):  # YYYY/MM/DD
+        date_obj = datetime.strptime(date_str, '%Y/%m/%d').replace(
+            tzinfo=dt.UTC,
+        )
+    else:  # MM/DD/YYYY
+        date_obj = datetime.strptime(date_str, '%m/%d/%Y').replace(
+            tzinfo=dt.UTC,
+        )
+    return date_obj.strftime('%Y-%m-%d')
 
 
 def extract_workout_type(backblast: str) -> str:
@@ -336,76 +395,108 @@ def transform_sql_to_parsed_beatdown(
 ) -> ParsedBeatdown:
     """Transform a SQL beatdown row into a fully parsed App BeatDown model."""
     backblast = sql_bd.backblast or ''
-    # Title: first line
-    title = backblast.split('\n', 1)[0].strip() if backblast else None
-    # Q and Co-Q
-    q_user_id = None
-    coq_user_id = None
-    pax = None
-    non_registered_pax = None
-    fngs = None
-    warmup = None
-    thang = None
-    mary = None
-    announcements = None
-    cot = None
 
-    q_match = re.search(r'^Q:\s*(.*)$', backblast, re.MULTILINE)
-    if q_match:
-        q_line = q_match.group(1).strip()
-        q_ids, _ = extract_pax_from_string(q_line)
-        q_user_id = q_ids[0] if q_ids else None
-    coq_match = re.search(r'^COQ:\s*(.*)$', backblast, re.MULTILINE)
-    if coq_match:
-        coq_line = coq_match.group(1).strip()
-        coq_ids, _ = extract_pax_from_string(coq_line)
-        coq_user_id = coq_ids if coq_ids else None
-    pax_match = re.search(r'^PAX:\s*(.*)$', backblast, re.MULTILINE)
-    if pax_match:
-        pax_line = pax_match.group(1).strip()
-        pax, non_registered_pax = extract_pax_from_string(pax_line)
-    fngs = extract_fng_names(backblast)
-    warmup = _extract_section(backblast, 'WARMUP')
-    thang = _extract_section(backblast, 'THANG') or _extract_section(
-        backblast,
-        'THE THANG',
-    )
-    mary = _extract_section(backblast, 'MARY')
-    announcements = _extract_section(backblast, 'ANNOUNCEMENTS')
-    cot = _extract_section(backblast, 'COT')
-    # Dates and analytics
+    # Extract basic content
+    title = _extract_title(backblast)
+
+    # Extract people information
+    people = _extract_all_people(backblast)
+
+    # Extract content sections
+    sections = _extract_all_sections(backblast)
+
+    # Compute analytics
     bd_date = extract_bd_date(backblast)
-    workout_type = extract_workout_type(backblast)
-    day_of_week = extract_day_of_week(bd_date) if bd_date else None
-    has_announcements = check_has_announcements(backblast)
-    has_cot = check_has_cot(backblast)
-    word_count = calculate_word_count(backblast)
-    pax_count = extract_pax_count(backblast)
-    fng_count = extract_fng_count(backblast)
+    analytics = _compute_simple_analytics(backblast, bd_date)
+
     return ParsedBeatdown(
         timestamp=sql_bd.timestamp or '',
         last_edited=sql_bd.ts_edited,
         raw_backblast=backblast,
         title=title,
-        q_user_id=q_user_id,
-        coq_user_id=coq_user_id,
-        pax=pax,
-        non_registered_pax=non_registered_pax,
-        fngs=fngs,
-        warmup=warmup,
-        thang=thang,
-        mary=mary,
-        announcements=announcements,
-        cot=cot,
+        q_user_id=people.q_user_id,
+        coq_user_id=people.coq_user_id,
+        pax=people.pax,
+        non_registered_pax=people.non_registered_pax,
+        fngs=people.fngs,
+        warmup=sections.warmup,
+        thang=sections.thang,
+        mary=sections.mary,
+        announcements=sections.announcements,
+        cot=sections.cot,
         bd_date=bd_date,
-        workout_type=workout_type,
-        day_of_week=day_of_week,
-        has_announcements=has_announcements,
-        has_cot=has_cot,
-        word_count=word_count,
-        pax_count=pax_count,
-        fng_count=fng_count,
+        workout_type=analytics.workout_type,
+        day_of_week=analytics.day_of_week,
+        has_announcements=analytics.has_announcements,
+        has_cot=analytics.has_cot,
+        word_count=analytics.word_count,
+        pax_count=analytics.pax_count,
+        fng_count=analytics.fng_count,
     )
+
+
+def _extract_all_people(backblast: str) -> PeopleInfo:
+    """Extract all people-related information from backblast."""
+    people = PeopleInfo()
+
+    # Extract Q
+    q_match = re.search(r'^Q:\s*(.*)$', backblast, re.MULTILINE)
+    if q_match:
+        q_line = q_match.group(1).strip()
+        q_ids, _ = extract_pax_from_string(q_line)
+        people.q_user_id = q_ids[0] if q_ids else None
+
+    # Extract COQ
+    coq_match = re.search(r'^COQ:\s*(.*)$', backblast, re.MULTILINE)
+    if coq_match:
+        coq_line = coq_match.group(1).strip()
+        coq_ids, _ = extract_pax_from_string(coq_line)
+        people.coq_user_id = coq_ids if coq_ids else None
+
+    # Extract PAX
+    pax_match = re.search(r'^PAX:\s*(.*)$', backblast, re.MULTILINE)
+    if pax_match:
+        pax_line = pax_match.group(1).strip()
+        people.pax, people.non_registered_pax = extract_pax_from_string(
+            pax_line,
+        )
+
+    # Extract FNGs
+    people.fngs = extract_fng_names(backblast)
+
+    return people
+
+
+def _extract_all_sections(backblast: str) -> ContentSections:
+    """Extract all workout content sections from backblast."""
+    return ContentSections(
+        warmup=_extract_section(backblast, 'WARMUP'),
+        thang=_extract_section(backblast, 'THANG') or _extract_section(backblast, 'THE THANG'),
+        mary=_extract_section(backblast, 'MARY'),
+        announcements=_extract_section(backblast, 'ANNOUNCEMENTS'),
+        cot=_extract_section(backblast, 'COT'),
+    )
+
+
+def _compute_simple_analytics(
+    backblast: str,
+    bd_date: str | None,
+) -> AnalyticsData:
+    """Compute simple analytical properties from backblast."""
+    return AnalyticsData(
+        workout_type=extract_workout_type(backblast),
+        day_of_week=extract_day_of_week(bd_date) if bd_date else None,
+        has_announcements=check_has_announcements(backblast),
+        has_cot=check_has_cot(backblast),
+        word_count=calculate_word_count(backblast),
+        pax_count=extract_pax_count(backblast),
+        fng_count=extract_fng_count(backblast),
+    )
+
+
+def _extract_title(backblast: str) -> str | None:
+    """Extract title from the first line of backblast."""
+    return backblast.split('\n', 1)[0].strip() if backblast else None
 
 
 # Helper functions
