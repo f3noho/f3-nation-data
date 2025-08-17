@@ -87,7 +87,7 @@ AO: <#C04PD48V9KR>
 Q: <@U04SUMEGFRV>
 PAX: <@U04TCJ2GMF0>, Radio
 COUNT: 2"""
-    
+
     # No FNG field, so should return empty list even if non-registered names exist
     assert extract_fng_names(backblast) == []
 
@@ -101,6 +101,6 @@ Q: <@U04SUMEGFRV>
 PAX: <@U04TCJ2GMF0>, Radio
 fngs: 1 radio
 COUNT: 2"""
-    
+
     # Should find "Radio" even though FNG field is lowercase "radio"
     assert extract_fng_names(backblast) == ['Radio']

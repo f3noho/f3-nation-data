@@ -171,7 +171,6 @@ def extract_bd_date(backblast: str) -> str | None:
                 return date_obj.strftime('%Y-%m-%d')
             except ValueError:
                 continue
-
     return None
 
 
