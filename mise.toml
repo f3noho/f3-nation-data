@@ -4,6 +4,7 @@ python.uv_venv_auto = true
 
 [env]
 TB_PROJECT_SOURCE = "f3_nation_data"
+TB_COVERAGE_EXTRA_ARGS = "--cov=dev_utilities"
 COVERAGE_RCFILE="configs/.coveragerc"
 
 [tools]

@@ -8,12 +8,18 @@ requires-python = ">=3.11"
 dynamic = ["version"]
 
 dependencies = [
-    "poethepoet>=0.37.0",
-    "tbelt>=0.0.1",
+    "jinja2>=3.1.6",
+    "psycopg2-binary>=2.9.10",
+    "pydantic>=2.11.7, <3",
+    "pymysql>=1.1.1",
+    "sqlalchemy>=2.0.43",
+    "structlog>=25.4.0, <26",
 ]
 
 [dependency-groups]
 dev = [
+    "poethepoet>=0.37.0",
+    "tbelt>=0.0.2",
     "pytest>=8.0.0",
     "pytest-mock>=3.12.0",
     "pytest-cov>=4.0.0",
