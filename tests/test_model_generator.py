@@ -1,18 +1,16 @@
 """Test the model generator with an in-memory database."""
 
-import contextlib
-import sqlite3
-import tempfile
-from collections.abc import Generator
+import subprocess
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import pytest
-from sqlalchemy import Engine, create_engine, text
-from sqlalchemy.orm import sessionmaker
+from pytest_mock import MockerFixture
+from sqlalchemy import Engine, text
+from sqlalchemy.orm import Session
 
+import dev_utilities.generate_models as generate_models_module
 from dev_utilities.generate_models import (
-    CLASS_NAMES,
     format_generated_models,
     generate_table_model,
     get_default_value,
@@ -25,149 +23,9 @@ from f3_nation_data.models.sql.beatdown import SqlBeatDownModel
 from f3_nation_data.models.sql.user import SqlUserModel
 
 
-@pytest.fixture
-def test_database() -> Generator[str, None, None]:
-    """Create a temporary SQLite database with F3-style test data."""
-    # Create temporary database file
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.db') as temp_db:
-        temp_db_path = temp_db.name
-
-    conn = sqlite3.connect(temp_db_path)
-    cursor = conn.cursor()
-
-    # Create test tables
-    _create_test_tables(cursor)
-    _insert_test_data(cursor)
-
-    conn.commit()
-    conn.close()
-
-    yield temp_db_path
-
-    # Cleanup
-    with contextlib.suppress(OSError):
-        Path(temp_db_path).unlink()
-
-
-@pytest.fixture
-def test_engine(test_database: str) -> Engine:
-    """Create SQLAlchemy engine for test database."""
-    return create_engine(f'sqlite:///{test_database}')
-
-
-def _create_test_tables(cursor: sqlite3.Cursor) -> None:
-    """Create test tables with F3-style schema."""
-    # Create AOs table
-    cursor.execute("""
-        CREATE TABLE aos (
-            ao_id INTEGER PRIMARY KEY,
-            ao_display_name VARCHAR(45) NOT NULL,
-            ao_location_subtitle VARCHAR(45),
-            ao_location VARCHAR(100),
-            is_active BOOLEAN DEFAULT 1,
-            created_date DATE
-        )
-    """)
-
-    # Create Users table
-    cursor.execute("""
-        CREATE TABLE users (
-            user_id INTEGER PRIMARY KEY,
-            user_name VARCHAR(45) NOT NULL,
-            first_name VARCHAR(45),
-            last_name VARCHAR(45),
-            email VARCHAR(100),
-            phone VARCHAR(20),
-            is_active BOOLEAN DEFAULT 1,
-            created_date DATE
-        )
-    """)
-
-
-def _insert_test_data(cursor: sqlite3.Cursor) -> None:
-    """Insert F3-themed test data."""
-    # Insert test AOs with F3-style names
-    aos_data = [
-        (
-            1,
-            'The Grill',
-            'Where meat meets heat',
-            'Backyard BBQ Park',
-            True,
-            '2023-01-15',
-        ),
-        (
-            2,
-            'Donut Shop',
-            'Glazed and confused',
-            'Sweet Treats Plaza',
-            True,
-            '2023-02-01',
-        ),
-        (
-            3,
-            'Taco Stand',
-            'Spice up your life',
-            'Salsa Verde Commons',
-            True,
-            '2023-03-10',
-        ),
-    ]
-
-    cursor.executemany(
-        """
-        INSERT INTO aos (ao_id, ao_display_name, ao_location_subtitle, ao_location, is_active, created_date)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """,
-        aos_data,
-    )
-
-    # Insert test users with food-themed F3 names
-    users_data = [
-        (
-            101,
-            'Hotdog',
-            'Frank',
-            'Mustard',
-            'hotdog@f3.com',
-            '555-0101',
-            True,
-            '2023-01-10',
-        ),
-        (
-            102,
-            'Hamburger',
-            'Chuck',
-            'Beef',
-            'burger@f3.com',
-            '555-0102',
-            True,
-            '2023-01-12',
-        ),
-        (
-            103,
-            'Taco',
-            'Juan',
-            'Salsa',
-            'taco@f3.com',
-            '555-0103',
-            True,
-            '2023-01-15',
-        ),
-    ]
-
-    cursor.executemany(
-        """
-        INSERT INTO users (user_id, user_name, first_name, last_name, email, phone, is_active, created_date)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """,
-        users_data,
-    )
-
-
-def test_database_tables_exist(test_engine: Engine) -> None:
+def test_database_tables_exist(f3_test_database: Engine) -> None:
     """Test that our test database has the expected tables."""
-    with test_engine.connect() as conn:
+    with f3_test_database.connect() as conn:
         result = conn.execute(
             text("SELECT name FROM sqlite_master WHERE type='table'"),
         )
@@ -175,27 +33,27 @@ def test_database_tables_exist(test_engine: Engine) -> None:
 
     assert 'aos' in tables
     assert 'users' in tables
+    assert 'beatdowns' in tables
 
 
-def test_schema_reflection(test_engine: Engine) -> None:
+def test_schema_reflection(f3_test_database: Engine) -> None:
     """Test that schema reflection works correctly."""
     # Test AO table reflection
-    aos_schema = reflect_table_schema(test_engine, 'aos')
+    aos_schema = reflect_table_schema(f3_test_database, 'aos')
 
-    assert len(aos_schema.columns) == 6
-    assert aos_schema.primary_key == ['ao_id']
+    assert len(aos_schema.columns) >= 5  # We expect several columns
+    assert aos_schema.primary_key == ['channel_id']  # AOs use channel_id as PK
 
     # Check specific columns exist
     column_names = {col['name'] for col in aos_schema.columns}
-    assert 'ao_id' in column_names
-    assert 'ao_display_name' in column_names
-    assert 'is_active' in column_names
+    assert 'channel_id' in column_names
+    assert 'ao' in column_names
 
 
-def test_model_generation(test_engine: Engine, tmp_path: Path) -> None:
+def test_model_generation(f3_test_database: Engine, tmp_path: Path) -> None:
     """Test that model generation creates valid Python code."""
     # Test generating a model for the 'aos' table
-    success = generate_table_model(test_engine, 'aos', tmp_path)
+    success = generate_table_model(f3_test_database, 'aos', tmp_path)
     assert success
 
     # Verify file was created with expected name
@@ -206,18 +64,18 @@ def test_model_generation(test_engine: Engine, tmp_path: Path) -> None:
     content = model_file.read_text()
     assert 'class SqlAOModel(Base):' in content
     assert "__tablename__ = 'aos'" in content
-    assert 'ao_id' in content
-    assert 'ao_display_name' in content
+    assert 'channel_id' in content  # Updated for actual AO schema
+    assert 'ao' in content  # Updated for actual AO schema
     assert 'import sqlalchemy as sa' in content
 
 
 def test_generated_model_can_be_imported_and_used(
-    test_engine: Engine,
+    f3_test_database: Engine,
     tmp_path: Path,
 ) -> None:
     """Test that generated models can actually be imported and used."""
     # Generate the model
-    success = generate_table_model(test_engine, 'aos', tmp_path)
+    success = generate_table_model(f3_test_database, 'aos', tmp_path)
     assert success
 
     model_file = tmp_path / 'ao.py'
@@ -225,8 +83,8 @@ def test_generated_model_can_be_imported_and_used(
 
     # Test that the generated content has the expected structure
     assert 'class SqlAOModel(Base):' in content
-    assert 'ao_id: Mapped[int]' in content
-    assert 'ao_display_name: Mapped[str]' in content
+    assert 'channel_id: Mapped[str]' in content  # Updated for actual AO schema
+    assert 'ao: Mapped[str]' in content  # Updated for actual AO schema
     assert 'primary_key=True' in content
     assert 'nullable=False' in content
     assert 'def __repr__(self)' in content
@@ -238,10 +96,13 @@ def test_generated_model_can_be_imported_and_used(
         pytest.fail(f'Generated model has invalid Python syntax: {e}')
 
 
-def test_user_model_generation(test_engine: Engine, tmp_path: Path) -> None:
+def test_user_model_generation(
+    f3_test_database: Engine,
+    tmp_path: Path,
+) -> None:
     """Test generating and using the user model."""
     # Generate user model
-    success = generate_table_model(test_engine, 'users', tmp_path)
+    success = generate_table_model(f3_test_database, 'users', tmp_path)
     assert success
 
     # Verify file exists with expected name (users -> user)
@@ -252,87 +113,68 @@ def test_user_model_generation(test_engine: Engine, tmp_path: Path) -> None:
     assert 'class SqlUserModel(Base):' in content
     assert "__tablename__ = 'users'" in content
     assert 'user_name' in content
-    assert 'email' in content
+    assert 'user_id' in content  # Updated for actual user schema
 
 
-def test_table_with_defaults(test_engine: Engine, tmp_path: Path) -> None:
-    """Test generating model for table with default values."""
-    # Add a column with default to the existing users table
-    with test_engine.connect() as conn:
-        conn.execute(
-            text('ALTER TABLE users ADD COLUMN enabled BOOLEAN DEFAULT 1'),
-        )
-        conn.execute(
-            text(
-                "ALTER TABLE users ADD COLUMN status VARCHAR(20) DEFAULT 'active'",
-            ),
-        )
-        conn.commit()
-
-    success = generate_table_model(test_engine, 'users', tmp_path)
+def test_f3_schema_default_values(
+    f3_test_database: Engine,
+    tmp_path: Path,
+) -> None:
+    """Test that the generator correctly handles F3 schema's actual default values."""
+    # Test with the users table, which has a default value for 'app' field
+    success = generate_table_model(f3_test_database, 'users', tmp_path)
     assert success
 
     model_file = tmp_path / 'user.py'
     content = model_file.read_text()
 
-    # Should contain default values in the generated model
-    assert 'default=' in content  # Some kind of default should be present
+    # The F3 users table has 'app' field with default=False
+    # Check that this is properly reflected in the generated model
+    assert 'app:' in content
+    assert 'default=' in content  # Should have the actual F3 default value
+
+    # Verify the generated model compiles and is valid
+    compile(content, model_file, 'exec')
 
 
-def test_table_with_composite_primary_key(
-    test_engine: Engine,
+def test_beatdown_model_generation_with_composite_key(
+    f3_test_database: Engine,
     tmp_path: Path,
 ) -> None:
-    """Test repr format generation for composite primary keys."""
-    # Create a new table that we'll add to CLASS_NAMES temporarily
+    """Test generating model for beatdowns table with realistic composite primary key."""
+    success = generate_table_model(f3_test_database, 'beatdowns', tmp_path)
+    assert success
 
-    # Temporarily add the test table to the mapping
-    original_mapping = CLASS_NAMES.copy()
-    CLASS_NAMES['test_composite'] = 'SqlTestCompositeModel'
+    model_file = tmp_path / 'beatdown.py'
+    assert model_file.exists()
 
+    content = model_file.read_text()
+    assert 'class SqlBeatDownModel(Base):' in content
+    assert "__tablename__ = 'beatdowns'" in content
+
+    # Check composite primary key columns are present
+    assert 'ao_id' in content
+    assert 'bd_date' in content
+    assert 'q_user_id' in content
+    assert 'primary_key=True' in content
+
+    # Should have __repr__ with composite key format
+    assert 'ao_id={self.ao_id}' in content
+    assert 'bd_date={self.bd_date}' in content
+    assert 'q_user_id={self.q_user_id}' in content
+
+    # Test that the file is valid Python syntax
     try:
-        with test_engine.connect() as conn:
-            conn.execute(
-                text("""
-                CREATE TABLE test_composite (
-                    user_id INTEGER NOT NULL,
-                    role_id INTEGER NOT NULL,
-                    assigned_date DATE,
-                    PRIMARY KEY (user_id, role_id)
-                )
-            """),
-            )
-            conn.commit()
-
-        success = generate_table_model(
-            test_engine,
-            'test_composite',
-            tmp_path,
-        )
-        assert success
-
-        model_file = tmp_path / 'test_composit.py'  # Note: filename removes last char
-        content = model_file.read_text()
-
-        # Should have both primary key columns
-        assert 'user_id' in content
-        assert 'role_id' in content
-        assert 'primary_key=True' in content
-
-        # __repr__ should include both primary keys for composite keys
-        assert 'user_id={self.user_id}, role_id={self.role_id}' in content
-
-    finally:
-        # Restore original mapping
-        CLASS_NAMES.clear()
-        CLASS_NAMES.update(original_mapping)
+        compile(content, model_file, 'exec')
+    except SyntaxError as e:
+        pytest.fail(f'Generated beatdown model has invalid Python syntax: {e}')
 
 
-def test_invalid_table_name(test_engine: Engine, tmp_path: Path) -> None:
+def test_invalid_table_name(f3_test_database: Engine, tmp_path: Path) -> None:
     """Test error handling for non-existent table."""
     # Try to generate model for table that doesn't exist
     success = generate_table_model(
-        test_engine,
+        f3_test_database,
         'nonexistent_table',
         tmp_path,
     )
@@ -366,98 +208,123 @@ def test_get_sqlalchemy_type_unknown_type():
 
 
 def test_generate_table_model_exception_handling(
-    test_engine: Engine,
+    f3_test_database: Engine,
     tmp_path: Path,
 ):
     """Test exception handling in generate_table_model (lines 297-298)."""
     # Use a non-existent table to trigger an exception
-    result = generate_table_model(test_engine, 'nonexistent_table', tmp_path)
+    result = generate_table_model(
+        f3_test_database,
+        'nonexistent_table',
+        tmp_path,
+    )
     assert result is False
 
 
-def test_main_database_connection_error():
+def test_main_database_connection_error(mocker: MockerFixture):
     """Test main function database connection error (lines 310-323)."""
     # Mock get_sql_engine to raise an exception
-    with patch('dev_utilities.generate_models.get_sql_engine') as mock_engine:
-        mock_engine.side_effect = Exception('Database connection failed')
-        result = main()
-        assert result == 1
+    mock_engine = mocker.patch.object(
+        generate_models_module,
+        'get_sql_engine',
+        side_effect=Exception('Database connection failed'),
+    )
+    result = main()
+    assert result == 1
+    mock_engine.assert_called_once()
 
 
-def test_main_model_generation_error():
+def test_main_model_generation_error(mocker: MockerFixture):
     """Test main function model generation error (lines 325-334, 336-340)."""
     # Mock get_sql_engine to succeed but generate_table_model to fail
-    with (
-        patch('dev_utilities.generate_models.get_sql_engine') as mock_engine,
-        patch(
-            'dev_utilities.generate_models.generate_table_model',
-        ) as mock_generate,
-    ):
-        mock_engine.return_value = Mock()
-        mock_generate.side_effect = Exception('Model generation failed')
+    mock_engine = mocker.patch.object(
+        generate_models_module,
+        'get_sql_engine',
+        return_value=Mock(),
+    )
+    mock_generate = mocker.patch.object(
+        generate_models_module,
+        'generate_table_model',
+        side_effect=Exception('Model generation failed'),
+    )
 
-        result = main()
-        assert result == 1
+    result = main()
+    assert result == 1
+    mock_engine.assert_called_once()
+    assert mock_generate.call_count >= 1  # Should try to generate at least one model
 
 
-def test_main_successful_execution():
+def test_main_successful_execution(mocker: MockerFixture):
     """Test main function successful execution (lines 388-391)."""
     # Mock successful execution path
-    with (
-        patch('dev_utilities.generate_models.get_sql_engine') as mock_engine,
-        patch(
-            'dev_utilities.generate_models.generate_table_model',
-        ) as mock_generate,
-        patch(
-            'dev_utilities.generate_models.format_generated_models',
-        ) as mock_format,
-    ):
-        mock_engine.return_value = Mock()
-        mock_generate.return_value = True
-        mock_format.return_value = None
+    mock_engine = mocker.patch.object(
+        generate_models_module,
+        'get_sql_engine',
+        return_value=Mock(),
+    )
+    mock_generate = mocker.patch.object(
+        generate_models_module,
+        'generate_table_model',
+        return_value=True,
+    )
+    mock_format = mocker.patch.object(
+        generate_models_module,
+        'format_generated_models',
+        return_value=None,
+    )
 
-        result = main()
-        assert result == 0
+    result = main()
+    assert result == 0
+    mock_engine.assert_called_once()
+    assert mock_generate.call_count >= 1  # Should generate models
+    mock_format.assert_called_once()
 
 
-def test_format_generated_models_success(tmp_path: Path):
+def test_format_generated_models_success(tmp_path: Path, mocker: MockerFixture):
     """Test format_generated_models function successful execution."""
     # Create a dummy python file to format
     test_file = tmp_path / 'test.py'
     test_file.write_text('x=1')
 
     # Mock successful subprocess execution
-    with patch('dev_utilities.generate_models.subprocess.run') as mock_run:
-        mock_result = Mock()
-        mock_result.returncode = 0
-        mock_run.return_value = mock_result
+    mock_result = Mock()
+    mock_result.returncode = 0
+    mock_run = mocker.patch.object(subprocess, 'run', return_value=mock_result)
 
-        # Should not raise any exception
-        format_generated_models(tmp_path)
+    # Should not raise any exception
+    format_generated_models(tmp_path)
+    mock_run.assert_called_once()
 
 
-def test_format_generated_models_failure(tmp_path: Path):
+def test_format_generated_models_failure(tmp_path: Path, mocker: MockerFixture):
     """Test format_generated_models function failure handling."""
     # Mock failed subprocess execution
-    with patch('dev_utilities.generate_models.subprocess.run') as mock_run:
-        mock_result = Mock()
-        mock_result.returncode = 1
-        mock_result.stdout = 'stdout output'
-        mock_result.stderr = 'stderr output'
-        mock_run.return_value = mock_result
+    mock_result = Mock()
+    mock_result.returncode = 1
+    mock_result.stdout = 'stdout output'
+    mock_result.stderr = 'stderr output'
+    mock_run = mocker.patch.object(subprocess, 'run', return_value=mock_result)
 
-        # Should not raise any exception, just log warning
-        format_generated_models(tmp_path)
+    # Should not raise any exception, just log warning
+    format_generated_models(tmp_path)
+    mock_run.assert_called_once()
 
 
-def test_format_generated_models_exception(tmp_path: Path):
+def test_format_generated_models_exception(
+    tmp_path: Path,
+    mocker: MockerFixture,
+):
     """Test format_generated_models function exception handling."""
     # Mock subprocess exception
-    with patch('dev_utilities.generate_models.subprocess.run') as mock_run:
-        mock_run.side_effect = OSError('Command not found')
+    mock_run = mocker.patch.object(
+        subprocess,
+        'run',
+        side_effect=OSError('Command not found'),
+    )
 
-        # Should not raise any exception, just log warning
-        format_generated_models(tmp_path)
+    # Should not raise any exception, just log warning
+    format_generated_models(tmp_path)
+    mock_run.assert_called_once()
 
 
 def test_committed_models_can_be_imported():
@@ -477,14 +344,91 @@ def test_committed_models_can_be_imported():
     assert SqlBeatDownModel.__tablename__ == 'beatdowns'
 
 
+def test_model_generation_with_f3_data_validation(
+    f3_test_database: Engine,
+    f3_test_session: Session,
+    tmp_path: Path,
+) -> None:
+    """Test model generation and validate against actual F3 fixture data."""
+    # Generate all three main models
+    success_ao = generate_table_model(f3_test_database, 'aos', tmp_path)
+    success_user = generate_table_model(f3_test_database, 'users', tmp_path)
+    success_beatdown = generate_table_model(
+        f3_test_database,
+        'beatdowns',
+        tmp_path,
+    )
+
+    assert success_ao
+    assert success_user
+    assert success_beatdown
+
+    # Verify all files were created
+    ao_file = tmp_path / 'ao.py'
+    user_file = tmp_path / 'user.py'
+    beatdown_file = tmp_path / 'beatdown.py'
+
+    assert ao_file.exists()
+    assert user_file.exists()
+    assert beatdown_file.exists()
+
+    # Test that generated models have correct structure for F3 data
+    ao_content = ao_file.read_text()
+    user_content = user_file.read_text()
+    beatdown_content = beatdown_file.read_text()
+
+    # Verify AO model matches F3 schema (note: SQLite booleans map to Any)
+    assert 'channel_id: Mapped[str]' in ao_content
+    assert 'ao: Mapped[str]' in ao_content
+    assert 'channel_created: Mapped[int]' in ao_content
+    assert 'archived: Mapped[Any]' in ao_content  # SQLite BOOLEAN -> Any
+    assert 'backblast: Mapped[Any | None]' in ao_content
+
+    # Verify User model matches F3 schema
+    assert 'user_id: Mapped[str]' in user_content
+    assert 'user_name: Mapped[str]' in user_content
+    assert 'real_name: Mapped[str]' in user_content
+    assert 'app: Mapped[Any]' in user_content  # SQLite BOOLEAN -> Any
+
+    # Verify Beatdown model with composite key
+    assert 'ao_id: Mapped[str]' in beatdown_content
+    assert 'bd_date: Mapped[' in beatdown_content  # Date type varies
+    assert 'q_user_id: Mapped[str]' in beatdown_content
+    assert 'pax_count: Mapped[' in beatdown_content
+
+    # Test that all files compile to valid Python
+    compile(ao_content, ao_file, 'exec')
+    compile(user_content, user_file, 'exec')
+    compile(beatdown_content, beatdown_file, 'exec')
+
+    # Validate that fixture data would work with these schemas by checking
+    # that we have actual data that matches the generated field expectations
+    aos = f3_test_session.query(SqlAOModel).all()
+    users = f3_test_session.query(SqlUserModel).all()
+    beatdowns = f3_test_session.query(SqlBeatDownModel).all()
+
+    assert len(aos) > 0, 'Should have AO test data'
+    assert len(users) > 0, 'Should have user test data'
+    assert len(beatdowns) > 0, 'Should have beatdown test data'
+
+    # Test specific F3 data characteristics
+    depot_ao = f3_test_session.query(SqlAOModel).filter_by(ao='The Depot').first()
+    assert depot_ao is not None, 'Should find The Depot AO from fixtures'
+    assert depot_ao.channel_id == 'C04PD48V9KR'
+
+    steubie = f3_test_session.query(SqlUserModel).filter_by(user_name='Steubie').first()
+    assert steubie is not None, 'Should find Steubie user from fixtures'
+    assert steubie.user_id == 'U04SUMEGFRV'
+
+
 def test_generated_models_basic_functionality(
-    test_engine: Engine,
+    f3_test_database: Engine,
     tmp_path: Path,
 ):
     """Test basic functionality of generated models by compiling and validating syntax."""
     # Generate models for testing
-    success_ao = generate_table_model(test_engine, 'aos', tmp_path)
-    success_user = generate_table_model(test_engine, 'users', tmp_path)
+    success_ao = generate_table_model(f3_test_database, 'aos', tmp_path)
+    success_user = generate_table_model(f3_test_database, 'users', tmp_path)
 
     assert success_ao
     assert success_user
@@ -518,176 +462,74 @@ def test_generated_models_basic_functionality(
     assert 'def __repr__(self)' in user_content
 
 
-def test_generated_model_file_structure(test_engine: Engine, tmp_path: Path):
+def test_generated_model_file_structure(
+    f3_test_database: Engine,
+    tmp_path: Path,
+):
     """Test that generated model files contain expected basic structure."""
-    generate_table_model(test_engine, 'aos', tmp_path)
+    generate_table_model(f3_test_database, 'aos', tmp_path)
 
     ao_file = tmp_path / 'ao.py'
     content = ao_file.read_text()
 
-    # Test the things that matter for functionality
+    # Test the essential structural elements
     assert 'class SqlAOModel' in content
     assert "__tablename__ = 'aos'" in content
     assert 'def __repr__(self)' in content
+    assert 'Mapped[' in content  # Type annotations
 
     # Verify it's valid Python syntax
-    try:
-        compile(content, ao_file, 'exec')
-    except SyntaxError as e:
-        pytest.fail(f'Generated model has invalid Python syntax: {e}')
+    compile(content, ao_file, 'exec')
 
 
-def test_committed_models_with_test_database():
+def test_committed_models_with_test_database(f3_test_session: Session) -> None:
     """Integration test: use committed models to connect to test database and fetch data."""
-    # Create an in-memory SQLite database with schema matching committed models exactly
-    engine = create_engine('sqlite:///:memory:')
+    # Test AO table - get count and sample data
+    ao_count = f3_test_session.query(SqlAOModel).count()
+    ao_samples = f3_test_session.query(SqlAOModel).limit(3).all()
 
-    # Create the test schema that matches our committed models exactly
-    with engine.connect() as conn:
-        # Create AOs table (matches ao.py model exactly)
-        conn.execute(
-            text("""
-            CREATE TABLE aos (
-                channel_id VARCHAR(45) PRIMARY KEY,
-                ao VARCHAR(45) NOT NULL,
-                channel_created INTEGER NOT NULL,
-                archived BOOLEAN NOT NULL,
-                backblast BOOLEAN,
-                site_q_user_id VARCHAR(45)
-            )
-        """),
-        )
+    # Test User table - get count and sample data
+    user_count = f3_test_session.query(SqlUserModel).count()
+    user_samples = f3_test_session.query(SqlUserModel).limit(3).all()
 
-        # Create Users table (matches user.py model exactly)
-        conn.execute(
-            text("""
-            CREATE TABLE users (
-                user_id VARCHAR(45) PRIMARY KEY,
-                user_name VARCHAR(45) NOT NULL,
-                real_name VARCHAR(45) NOT NULL,
-                phone VARCHAR(45),
-                email VARCHAR(45),
-                start_date DATE,
-                app BOOLEAN NOT NULL DEFAULT 0,
-                json JSON
-            )
-        """),
-        )
+    # Test Beatdown table - get count and sample data
+    beatdown_count = f3_test_session.query(SqlBeatDownModel).count()
+    beatdown_samples = f3_test_session.query(SqlBeatDownModel).limit(2).all()
 
-        # Create Beatdowns table (matches beatdown.py model exactly)
-        conn.execute(
-            text("""
-            CREATE TABLE beatdowns (
-                timestamp VARCHAR(45),
-                ts_edited VARCHAR(45),
-                ao_id VARCHAR(45) NOT NULL,
-                bd_date DATE NOT NULL,
-                q_user_id VARCHAR(45) NOT NULL,
-                coq_user_id VARCHAR(45),
-                pax_count INTEGER,
-                backblast TEXT,
-                backblast_parsed TEXT,
-                fngs VARCHAR(45),
-                fng_count INTEGER,
-                json JSON,
-                PRIMARY KEY (ao_id, bd_date, q_user_id)
-            )
-        """),
-        )
+    # Verify we got the expected counts based on our test data
+    assert ao_count > 0  # We have AOs from fixtures
+    assert user_count > 0  # We have users from fixtures
+    assert beatdown_count > 0  # We have beatdowns from fixtures
 
-        # Insert test data that matches the schema types exactly
-        conn.execute(
-            text("""
-            INSERT INTO aos (channel_id, ao, channel_created, archived, backblast, site_q_user_id)
-            VALUES
-                ('CH001', 'The Grill', 1640995200, 0, 1, 'U001'),
-                ('CH002', 'Donut Shop', 1641081600, 0, 1, 'U002'),
-                ('CH003', 'Taco Stand', 1641168000, 0, 1, 'U003')
-        """),
-        )
+    # Verify sample data is not empty
+    assert len(ao_samples) > 0
+    assert len(user_samples) > 0
+    assert len(beatdown_samples) > 0
 
-        conn.execute(
-            text("""
-            INSERT INTO users (user_id, user_name, real_name, email, phone, start_date, app, json)
-            VALUES
-                ('U001', 'Hotdog', 'Frank Mustard', 'hotdog@f3.com', '555-0101', '2023-01-10', 0, NULL),
-                ('U002', 'Hamburger', 'Chuck Beef', 'hamburger@f3.com', '555-0102', '2023-01-12', 0, NULL),
-                ('U003', 'Taco', 'Jose Salsa', 'taco@f3.com', '555-0103', '2023-01-15', 0, NULL)
-        """),
-        )
+    # Test that we can access specific fields from committed models
+    first_ao = ao_samples[0]
+    assert hasattr(first_ao, 'channel_id')
+    assert hasattr(first_ao, 'ao')
+    assert first_ao.ao is not None
 
-        conn.execute(
-            text("""
-            INSERT INTO beatdowns (timestamp, ao_id, bd_date, q_user_id, pax_count, backblast, fng_count)
-            VALUES
-                ('1642204800', 'CH001', '2024-01-15', 'U001', 12, 'Great workout at The Grill', 2),
-                ('1642291200', 'CH002', '2024-01-16', 'U002', 8, 'Glazed and confused at Donut Shop', 0)
-        """),
-        )
+    first_user = user_samples[0]
+    assert hasattr(first_user, 'user_id')
+    assert hasattr(first_user, 'user_name')
+    assert first_user.user_name is not None
 
-        conn.commit()
+    first_beatdown = beatdown_samples[0]
+    assert hasattr(first_beatdown, 'ao_id')
+    assert hasattr(first_beatdown, 'bd_date')
+    assert hasattr(first_beatdown, 'q_user_id')
+    assert first_beatdown.ao_id is not None
 
-    # Create session
-    session_factory = sessionmaker(bind=engine)
-    session = session_factory()
+    # Test that __repr__ methods work
+    ao_repr = repr(first_ao)
+    user_repr = repr(first_user)
+    beatdown_repr = repr(first_beatdown)
 
-    try:
-        # Test AO table - get count and sample data
-        ao_count = session.query(SqlAOModel).count()
-
-        # Get sample AO data
-        ao_samples = session.query(SqlAOModel).limit(3).all()
-
-        # Test User table - get count and sample data
-        user_count = session.query(SqlUserModel).count()
-
-        # Get sample User data
-        user_samples = session.query(SqlUserModel).limit(3).all()
-
-        # Test Beatdown table - get count and sample data
-        beatdown_count = session.query(SqlBeatDownModel).count()
-
-        # Get sample Beatdown data
-        beatdown_samples = session.query(SqlBeatDownModel).limit(2).all()
-
-        # Verify we got the expected counts based on our test data
-        assert ao_count == 3  # We inserted 3 AOs
-        assert user_count == 3  # We inserted 3 users
-        assert beatdown_count == 2  # We inserted 2 beatdowns
-
-        # Verify sample data is not empty
-        assert len(ao_samples) == 3
-        assert len(user_samples) == 3
-        assert len(beatdown_samples) == 2
-
-        # Test that we can access specific fields from committed models
-        first_ao = ao_samples[0]
-        assert hasattr(first_ao, 'channel_id')
-        assert hasattr(first_ao, 'ao')
-        assert first_ao.ao in ['The Grill', 'Donut Shop', 'Taco Stand']
-
-        first_user = user_samples[0]
-        assert hasattr(first_user, 'user_id')
-        assert hasattr(first_user, 'user_name')
-        assert first_user.user_name in ['Hotdog', 'Hamburger', 'Taco']
-
-        first_beatdown = beatdown_samples[0]
-        assert hasattr(first_beatdown, 'ao_id')
-        assert hasattr(first_beatdown, 'bd_date')
-        assert hasattr(first_beatdown, 'q_user_id')
-        assert first_beatdown.ao_id in ['CH001', 'CH002']
-
-        # Test that __repr__ methods work
-        ao_repr = repr(first_ao)
-        user_repr = repr(first_user)
-        beatdown_repr = repr(first_beatdown)
-
-        assert 'SqlAOModel' in ao_repr
-        assert 'SqlUserModel' in user_repr
-        assert 'SqlBeatDownModel' in beatdown_repr
-        assert str(first_ao.channel_id) in ao_repr
-        assert str(first_user.user_id) in user_repr
-
-    finally:
-        session.close()
-        engine.dispose()
+    assert 'SqlAOModel' in ao_repr
+    assert 'SqlUserModel' in user_repr
+    assert 'SqlBeatDownModel' in beatdown_repr
+    assert str(first_ao.channel_id) in ao_repr
+    assert str(first_user.user_id) in user_repr

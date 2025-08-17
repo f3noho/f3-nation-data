@@ -1,0 +1,42 @@
+[
+  {
+    "channel_id": "C04PD48V9KR",
+    "ao": "The Depot",
+    "channel_created": 1640995200,
+    "archived": false,
+    "backblast": true,
+    "site_q_user_id": "U04SUMEGFRV"
+  },
+  {
+    "channel_id": "C04Q67VR6KT",
+    "ao": "The Nest",
+    "channel_created": 1641081600,
+    "archived": false,
+    "backblast": true,
+    "site_q_user_id": "U05H7BV7X8A"
+  },
+  {
+    "channel_id": "C04RIVER123",
+    "ao": "The River",
+    "channel_created": 1641168000,
+    "archived": false,
+    "backblast": true,
+    "site_q_user_id": "U0518C64UDC"
+  },
+  {
+    "channel_id": "C04CRUX4567",
+    "ao": "The Crux",
+    "channel_created": 1641254400,
+    "archived": false,
+    "backblast": false,
+    "site_q_user_id": "U051R13N25D"
+  },
+  {
+    "channel_id": "C04FIELD890",
+    "ao": "Field of Dreams",
+    "channel_created": 1641340800,
+    "archived": true,
+    "backblast": true,
+    "site_q_user_id": null
+  }
+]
