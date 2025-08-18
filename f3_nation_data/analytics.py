@@ -26,7 +26,7 @@ class HighestAttendanceResult(BaseModel):
     """Result model for highest attendance analysis per AO."""
 
     attendance_count: int
-    q_name: str
+    q_names: list[str]
     date: str
     title: str
 
@@ -213,7 +213,8 @@ def analyze_highest_attendance_per_ao(
         ao_name = ao_mapping.get(beatdown.ao_id, beatdown.ao_id)
 
         pax_count = parsed.pax_count or 0
-        q_name = _get_q_display_name(parsed.q_user_id, user_mapping)
+        all_qs = [parsed.q_user_id] + (parsed.coq_user_id or [])
+        q_names = [_get_q_display_name(q_user_id, user_mapping) for q_user_id in all_qs]
         date_str = _format_beatdown_date(parsed.bd_date)
         title = parsed.title or 'Untitled Beatdown'
 
@@ -221,7 +222,7 @@ def analyze_highest_attendance_per_ao(
         if ao_name not in ao_max_attendance or pax_count > ao_max_attendance[ao_name].attendance_count:
             ao_max_attendance[ao_name] = HighestAttendanceResult(
                 attendance_count=pax_count,
-                q_name=q_name,
+                q_names=q_names,
                 date=date_str,
                 title=title,
             )
@@ -300,6 +301,7 @@ def get_beatdown_details(
         Dictionary with beatdown details
     """
     parsed = transform_sql_to_parsed_beatdown(beatdown)
+    fngs = [fng.removeprefix('@') for fng in parsed.fngs or []]
 
     return BeatdownDetails(
         timestamp=beatdown.timestamp,
@@ -309,7 +311,7 @@ def get_beatdown_details(
         date=parsed.bd_date,
         pax_count=parsed.pax_count or 0,
         pax_names=[user_mapping.get(pax_id, pax_id) for pax_id in (parsed.pax or [])],
-        fng_names=parsed.fngs or [],
+        fng_names=fngs,
         workout_type=parsed.workout_type or 'bootcamp',
         word_count=parsed.word_count or 0,
     )

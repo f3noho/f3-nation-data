@@ -58,8 +58,8 @@ def extract_pax_from_string(pax_string: str) -> tuple[list[str], list[str]]:
     Returns:
         Tuple of (slack_ids, non_registered_names) lists with duplicates removed.
     """
-    slack_ids: set[str] = set()
-    non_registered_names: set[str] = set()
+    slack_ids: list[str] = []
+    non_registered_names: list[str] = []
 
     if not pax_string.strip():
         return list(slack_ids), list(non_registered_names)
@@ -77,10 +77,13 @@ def extract_pax_from_string(pax_string: str) -> tuple[list[str], list[str]]:
         slack_id_pattern = r'^<@([A-Z0-9]+)>$'
         match = re.match(slack_id_pattern, item)
         if match:
-            slack_ids.add(match.group(1))  # Extract just the user ID part
+            slack_id = match.group(1)
+            if slack_id not in slack_ids:
+                slack_ids.append(slack_id)  # Extract just the user ID part
         elif item and not item.startswith('<@') and item not in ['None', 'N/A']:
             # Non-registered name (not empty and not a malformed Slack ID)
-            non_registered_names.add(item)
+            if item not in non_registered_names:
+                non_registered_names.append(item)
 
     return list(slack_ids), list(non_registered_names)
 
@@ -439,8 +442,9 @@ def _extract_all_people(backblast: str) -> PeopleInfo:
     """Extract all people-related information from backblast."""
     people = PeopleInfo()
 
-    # Extract Q
+    # Extract Q (can be multiple)
     q_match = re.search(r'^Q:\s*(.*)$', backblast, re.MULTILINE)
+    q_ids = []
     if q_match:
         q_line = q_match.group(1).strip()
         q_ids, _ = extract_pax_from_string(q_line)
@@ -448,10 +452,14 @@ def _extract_all_people(backblast: str) -> PeopleInfo:
 
     # Extract COQ
     coq_match = re.search(r'^COQ:\s*(.*)$', backblast, re.MULTILINE)
+    coq_ids = []
     if coq_match:
         coq_line = coq_match.group(1).strip()
         coq_ids, _ = extract_pax_from_string(coq_line)
-        people.coq_user_id = coq_ids if coq_ids else None
+
+    # Combine Qs and COQs for coq_user_id (Q IDs first, then COQ IDs)
+    combined_coqs = q_ids[1:] + coq_ids if q_ids else coq_ids
+    people.coq_user_id = combined_coqs if combined_coqs else None
 
     # Extract PAX
     pax_match = re.search(r'^PAX:\s*(.*)$', backblast, re.MULTILINE)

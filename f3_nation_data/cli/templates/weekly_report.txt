@@ -9,7 +9,7 @@ Week of {{ week_start.strftime('%B %d') }} - {{ week_end.strftime('%B %d, %Y') }
 {% if fngs %}
 • #{{ ao_name.lower() }}:
 {%- for fng in fngs %}
-  • @{{ fng }}
+  • {{ fng }}
 {%- endfor -%}
 {% endif -%}
 {% endfor -%}
@@ -18,7 +18,7 @@ Week of {{ week_start.strftime('%B %d') }} - {{ week_end.strftime('%B %d, %Y') }
 {% if summary.ao_max_attendance -%}
 📈 Highest Attended Workout at Each AO:
 {% for ao_name, result in summary.ao_max_attendance.items() | sort(attribute='1.attendance_count', reverse=true) -%}
-{{ "%2d"|format(result.attendance_count) }} #{{ ao_name.lower() }} (Q: @{{ result.q_name }}) on {{ result.date }} - {{ result.title.replace('Backblast!', '').strip() }}
+{{ "%2d"|format(result.attendance_count) }} #{{ ao_name.lower() }} (Q: {{ result.q_names | join(', ') }}) on {{ result.date }} - {{ result.title.replace('Backblast!', '').strip() }}
 {% endfor -%}
 {% endif -%}
 
