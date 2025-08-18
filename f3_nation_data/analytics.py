@@ -10,7 +10,7 @@ This module provides analytics functions for beatdown data, including:
 
 from collections import Counter, defaultdict
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
@@ -29,6 +29,37 @@ class HighestAttendanceResult(BaseModel):
     q_name: str
     date: str
     title: str
+
+
+class WeeklySummary(BaseModel):
+    """Result model for weekly summary statistics."""
+
+    total_beatdowns: int
+    total_attendance: int
+    unique_pax: int
+    pax_counts: dict[str, int]
+    ao_counts: dict[str, int]
+    q_counts: dict[str, int]
+    ao_fngs: dict[str, list[str]]
+    ao_max_attendance: dict[str, HighestAttendanceResult]
+    top_pax: list[tuple[str, int]]
+    top_aos: list[tuple[str, int]]
+    top_qs: list[tuple[str, int]]
+
+
+class BeatdownDetails(BaseModel):
+    """Result model for beatdown detail information."""
+
+    timestamp: str | None
+    ao_name: str
+    q_name: str
+    title: str
+    date: str | None
+    pax_count: int
+    pax_names: list[str]
+    fng_names: list[str]
+    workout_type: str
+    word_count: int
 
 
 def get_user_mapping(session: 'Session') -> dict[str, str]:
@@ -182,21 +213,8 @@ def analyze_highest_attendance_per_ao(
         ao_name = ao_mapping.get(beatdown.ao_id, beatdown.ao_id)
 
         pax_count = parsed.pax_count or 0
-        q_name = user_mapping.get(parsed.q_user_id, 'Unknown Q') if parsed.q_user_id else 'Unknown Q'
-
-        # Format date
-        date_str = 'Unknown Date'
-        if parsed.bd_date:
-            try:
-                # bd_date is always a string in YYYY-MM-DD format from parsed model
-                date_obj = datetime.strptime(
-                    parsed.bd_date,
-                    '%Y-%m-%d',
-                ).replace(tzinfo=UTC)
-                date_str = date_obj.strftime('%m/%d/%Y')
-            except (ValueError, TypeError):
-                date_str = 'Unknown Date'
-
+        q_name = _get_q_display_name(parsed.q_user_id, user_mapping)
+        date_str = _format_beatdown_date(parsed.bd_date)
         title = parsed.title or 'Untitled Beatdown'
 
         # Keep track of highest attendance for this AO
@@ -215,7 +233,7 @@ def get_weekly_summary(
     beatdowns: list[SqlBeatDownModel],
     user_mapping: dict[str, str],
     ao_mapping: dict[str, str],
-) -> dict[str, Any]:
+) -> WeeklySummary:
     """Get comprehensive weekly summary statistics.
 
     Args:
@@ -236,18 +254,18 @@ def get_weekly_summary(
         user_mapping,
     )
 
-    return {
-        'total_beatdowns': len(beatdowns),
-        'total_attendance': sum(ao_counts.values()),
-        'unique_pax': len(pax_counts),
-        'pax_counts': pax_counts,
-        'ao_counts': ao_counts,
-        'q_counts': q_counts,
-        'ao_fngs': ao_fngs,
-        'ao_max_attendance': ao_max_attendance,
-        'top_pax': sorted(pax_counts.items(), key=lambda x: x[1], reverse=True)[:10],
-        'top_aos': sorted(ao_counts.items(), key=lambda x: x[1], reverse=True),
-        'top_qs': [
+    return WeeklySummary(
+        total_beatdowns=len(beatdowns),
+        total_attendance=sum(ao_counts.values()),
+        unique_pax=len(pax_counts),
+        pax_counts=pax_counts,
+        ao_counts=ao_counts,
+        q_counts=q_counts,
+        ao_fngs=ao_fngs,
+        ao_max_attendance=ao_max_attendance,
+        top_pax=sorted(pax_counts.items(), key=lambda x: x[1], reverse=True)[:10],
+        top_aos=sorted(ao_counts.items(), key=lambda x: x[1], reverse=True),
+        top_qs=[
             (q, count)
             for q, count in sorted(
                 q_counts.items(),
@@ -256,14 +274,14 @@ def get_weekly_summary(
             )
             if count >= 2
         ],
-    }
+    )
 
 
 def get_beatdown_details(
     beatdown: SqlBeatDownModel,
     user_mapping: dict[str, str],
     ao_mapping: dict[str, str],
-) -> dict[str, Any]:
+) -> BeatdownDetails:
     """Get detailed information about a specific beatdown.
 
     Args:
@@ -276,18 +294,18 @@ def get_beatdown_details(
     """
     parsed = transform_sql_to_parsed_beatdown(beatdown)
 
-    return {
-        'timestamp': beatdown.timestamp,
-        'ao_name': ao_mapping.get(beatdown.ao_id, beatdown.ao_id),
-        'q_name': user_mapping.get(parsed.q_user_id, 'Unknown Q') if parsed.q_user_id else 'Unknown Q',
-        'title': parsed.title or 'Untitled Beatdown',
-        'date': parsed.bd_date,
-        'pax_count': parsed.pax_count or 0,
-        'pax_names': [user_mapping.get(pax_id, pax_id) for pax_id in (parsed.pax or [])],
-        'fng_names': parsed.fngs or [],
-        'workout_type': parsed.workout_type or 'bootcamp',
-        'word_count': parsed.word_count or 0,
-    }
+    return BeatdownDetails(
+        timestamp=beatdown.timestamp,
+        ao_name=ao_mapping.get(beatdown.ao_id, beatdown.ao_id),
+        q_name=user_mapping.get(parsed.q_user_id, 'Unknown Q') if parsed.q_user_id else 'Unknown Q',
+        title=parsed.title or 'Untitled Beatdown',
+        date=parsed.bd_date,
+        pax_count=parsed.pax_count or 0,
+        pax_names=[user_mapping.get(pax_id, pax_id) for pax_id in (parsed.pax or [])],
+        fng_names=parsed.fngs or [],
+        workout_type=parsed.workout_type or 'bootcamp',
+        word_count=parsed.word_count or 0,
+    )
 
 
 # Convenience functions for common analytics tasks
@@ -344,3 +362,40 @@ def get_month_range(date: datetime | None = None) -> tuple[datetime, datetime]:
     month_end = next_month - timedelta(microseconds=1)
 
     return month_start, month_end
+
+
+def _format_beatdown_date(bd_date: str | None) -> str:
+    """Format beatdown date string for display.
+
+    Args:
+        bd_date: Date string in YYYY-MM-DD format or None
+
+    Returns:
+        Formatted date string in MM/DD/YYYY format or 'Unknown Date'
+    """
+    if not bd_date:
+        return 'Unknown Date'
+
+    try:
+        date_obj = datetime.strptime(bd_date, '%Y-%m-%d').replace(tzinfo=UTC)
+        return date_obj.strftime('%m/%d/%Y')
+    except (ValueError, TypeError):
+        return 'Unknown Date'
+
+
+def _get_q_display_name(
+    q_user_id: str | None,
+    user_mapping: dict[str, str],
+) -> str:
+    """Get display name for Q (workout leader).
+
+    Args:
+        q_user_id: User ID of the Q or None
+        user_mapping: Dictionary mapping user ID to display name
+
+    Returns:
+        Display name for Q or 'Unknown Q' if not found
+    """
+    if not q_user_id:
+        return 'Unknown Q'
+    return user_mapping.get(q_user_id, 'Unknown Q')

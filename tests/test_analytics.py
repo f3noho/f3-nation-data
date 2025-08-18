@@ -8,7 +8,9 @@ from sqlalchemy.orm import Session
 
 import f3_nation_data.analytics as analytics_module
 from f3_nation_data.analytics import (
+    BeatdownDetails,
     HighestAttendanceResult,
+    WeeklySummary,
     analyze_ao_attendance,
     analyze_fngs_by_ao,
     analyze_highest_attendance_per_ao,
@@ -172,34 +174,21 @@ def test_get_weekly_summary(f3_test_database: Engine):
 
         summary = get_weekly_summary(beatdowns, user_mapping, ao_mapping)
 
-        # Should have all expected keys
-        expected_keys = {
-            'total_beatdowns',
-            'total_attendance',
-            'unique_pax',
-            'pax_counts',
-            'ao_counts',
-            'q_counts',
-            'ao_fngs',
-            'ao_max_attendance',
-            'top_pax',
-            'top_aos',
-            'top_qs',
-        }
-        assert set(summary.keys()) == expected_keys
+        # Should return WeeklySummary model
+        assert isinstance(summary, WeeklySummary)
 
         # Check data types
-        assert isinstance(summary['total_beatdowns'], int)
-        assert isinstance(summary['total_attendance'], int)
-        assert isinstance(summary['unique_pax'], int)
-        assert isinstance(summary['pax_counts'], dict)
-        assert isinstance(summary['ao_counts'], dict)
-        assert isinstance(summary['q_counts'], dict)
-        assert isinstance(summary['ao_fngs'], dict)
-        assert isinstance(summary['ao_max_attendance'], dict)
-        assert isinstance(summary['top_pax'], list)
-        assert isinstance(summary['top_aos'], list)
-        assert isinstance(summary['top_qs'], list)
+        assert isinstance(summary.total_beatdowns, int)
+        assert isinstance(summary.total_attendance, int)
+        assert isinstance(summary.unique_pax, int)
+        assert isinstance(summary.pax_counts, dict)
+        assert isinstance(summary.ao_counts, dict)
+        assert isinstance(summary.q_counts, dict)
+        assert isinstance(summary.ao_fngs, dict)
+        assert isinstance(summary.ao_max_attendance, dict)
+        assert isinstance(summary.top_pax, list)
+        assert isinstance(summary.top_aos, list)
+        assert isinstance(summary.top_qs, list)
 
 
 def test_get_beatdown_details(f3_test_database: Engine):
@@ -216,37 +205,33 @@ def test_get_beatdown_details(f3_test_database: Engine):
                 ao_mapping,
             )
 
-            # Should have all expected keys
-            expected_keys = {
-                'timestamp',
-                'ao_name',
-                'q_name',
-                'title',
-                'date',
-                'pax_count',
-                'pax_names',
-                'fng_names',
-                'workout_type',
-                'word_count',
-            }
-            assert set(details.keys()) == expected_keys
+            # Should return BeatdownDetails model
+            assert isinstance(details, BeatdownDetails)
 
-            # Check data types
-            assert isinstance(details['timestamp'], str)
-            assert isinstance(details['ao_name'], str)
-            assert isinstance(details['q_name'], str)
-            assert isinstance(details['title'], str)
-            assert isinstance(details['pax_count'], int)
-            assert isinstance(details['pax_names'], list)
-            assert isinstance(details['fng_names'], list)
-            assert isinstance(details['workout_type'], str)
-            assert isinstance(details['word_count'], int)
+            # Check data types using dot notation
+            assert isinstance(details.timestamp, (str, type(None)))
+            assert isinstance(details.ao_name, str)
+            assert isinstance(details.q_name, str)
+            assert isinstance(details.title, str)
+            assert isinstance(details.pax_count, int)
+            assert isinstance(details.pax_names, list)
+            assert isinstance(details.fng_names, list)
+            assert isinstance(details.workout_type, str)
+            assert isinstance(details.word_count, int)
 
 
 def test_get_week_range():
     """Test week range calculation."""
     # Test with a known Wednesday (2024-03-13)
-    test_date = datetime(2024, 3, 13, 15, 30, 0, tzinfo=UTC)  # Wednesday afternoon
+    test_date = datetime(
+        2024,
+        3,
+        13,
+        15,
+        30,
+        0,
+        tzinfo=UTC,
+    )  # Wednesday afternoon
     week_start, week_end = get_week_range(test_date)
 
     # Should give us Monday (March 11) to Sunday (March 17)
