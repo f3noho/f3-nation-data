@@ -59,6 +59,7 @@ class ParsedBeatdown(BaseModel):
     timestamp: str
     last_edited: str | None = None
     raw_backblast: str
+    ao_id: str  # Added for analytics efficiency
 
     # Parsed backblast content
     title: str | None = None

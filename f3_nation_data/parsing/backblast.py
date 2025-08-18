@@ -413,6 +413,7 @@ def transform_sql_to_parsed_beatdown(
     analytics = _compute_simple_analytics(backblast, bd_date)
 
     return ParsedBeatdown(
+        ao_id=sql_bd.ao_id,
         timestamp=sql_bd.timestamp or '',
         last_edited=sql_bd.ts_edited,
         raw_backblast=backblast,

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel
 
 from .fetch import fetch_sql_aos, fetch_sql_users
+from .models.parsed.beatdown import ParsedBeatdown
 from .models.sql.beatdown import SqlBeatDownModel
 from .parsing.backblast import transform_sql_to_parsed_beatdown
 
@@ -96,129 +97,71 @@ def get_ao_mapping(session: 'Session') -> dict[str, str]:
     return ao_mapping
 
 
-def analyze_pax_attendance(beatdowns: list[SqlBeatDownModel]) -> dict[str, int]:
-    """Analyze PAX attendance counts.
-
-    Args:
-        beatdowns: List of beatdown models
-
-    Returns:
-        Dictionary mapping PAX user ID to attendance count
-    """
+def analyze_pax_attendance(
+    parsed_beatdowns: list[ParsedBeatdown],
+) -> dict[str, int]:
+    """Analyze PAX attendance counts from parsed beatdowns."""
     pax_counts = Counter()
-
-    for beatdown in beatdowns:
-        parsed = transform_sql_to_parsed_beatdown(beatdown)
+    for parsed in parsed_beatdowns:
         if parsed.pax:
             for pax_id in parsed.pax:
                 pax_counts[pax_id] += 1
-
     return dict(pax_counts)
 
 
 def analyze_ao_attendance(
-    beatdowns: list[SqlBeatDownModel],
+    parsed_beatdowns: list[ParsedBeatdown],
     ao_mapping: dict[str, str],
 ) -> dict[str, int]:
-    """Analyze unique PAX attendance by AO.
-
-    Args:
-        beatdowns: List of beatdown models
-        ao_mapping: Dictionary mapping channel ID to AO name
-
-    Returns:
-        Dictionary mapping AO name to unique PAX count
-    """
+    """Analyze unique PAX attendance by AO from parsed beatdowns."""
     ao_unique_pax = defaultdict(set)
-
-    for beatdown in beatdowns:
-        parsed = transform_sql_to_parsed_beatdown(beatdown)
-        ao_name = ao_mapping.get(beatdown.ao_id, beatdown.ao_id)
-
+    for parsed in parsed_beatdowns:
+        ao_name = ao_mapping.get(parsed.ao_id, parsed.ao_id)
         if parsed.pax:
             ao_unique_pax[ao_name].update(parsed.pax)
-
-    # Convert sets to counts
     return {ao_name: len(pax_set) for ao_name, pax_set in ao_unique_pax.items()}
 
 
 def analyze_q_counts(
-    beatdowns: list[SqlBeatDownModel],
+    parsed_beatdowns: list,
     user_mapping: dict[str, str],
 ) -> dict[str, int]:
-    """Analyze Q (leadership) counts.
-
-    Args:
-        beatdowns: List of beatdown models
-        user_mapping: Dictionary mapping user ID to display name
-
-    Returns:
-        Dictionary mapping Q name to count of beatdowns they led
-    """
+    """Analyze Q (leadership) counts from parsed beatdowns."""
     q_counts = Counter()
-
-    for beatdown in beatdowns:
-        parsed = transform_sql_to_parsed_beatdown(beatdown)
+    for parsed in parsed_beatdowns:
         if parsed.q_user_id:
             q_name = user_mapping.get(parsed.q_user_id, parsed.q_user_id)
             q_counts[q_name] += 1
-
     return dict(q_counts)
 
 
 def analyze_fngs_by_ao(
-    beatdowns: list[SqlBeatDownModel],
+    parsed_beatdowns: list[ParsedBeatdown],
     ao_mapping: dict[str, str],
 ) -> dict[str, list[str]]:
-    """Analyze FNGs (First Name Guys) by AO.
-
-    Args:
-        beatdowns: List of beatdown models
-        ao_mapping: Dictionary mapping channel ID to AO name
-
-    Returns:
-        Dictionary mapping AO name to list of FNG names
-    """
+    """Analyze FNGs (First Name Guys) by AO from parsed beatdowns."""
     ao_fngs = defaultdict(list)
-
-    for beatdown in beatdowns:
-        parsed = transform_sql_to_parsed_beatdown(beatdown)
-        ao_name = ao_mapping.get(beatdown.ao_id, beatdown.ao_id)
-
+    for parsed in parsed_beatdowns:
+        ao_name = ao_mapping.get(parsed.ao_id, parsed.ao_id)
         if parsed.fngs:
             ao_fngs[ao_name].extend(parsed.fngs)
-
     return dict(ao_fngs)
 
 
 def analyze_highest_attendance_per_ao(
-    beatdowns: list[SqlBeatDownModel],
+    parsed_beatdowns: list[ParsedBeatdown],
     ao_mapping: dict[str, str],
     user_mapping: dict[str, str],
 ) -> dict[str, HighestAttendanceResult]:
-    """Find the highest attended beatdown per AO.
-
-    Args:
-        beatdowns: List of beatdown models
-        ao_mapping: Dictionary mapping channel ID to AO name
-        user_mapping: Dictionary mapping user ID to display name
-
-    Returns:
-        Dictionary mapping AO name to HighestAttendanceResult
-    """
+    """Find the highest attended beatdown per AO from parsed beatdowns."""
     ao_max_attendance = {}
-
-    for beatdown in beatdowns:
-        parsed = transform_sql_to_parsed_beatdown(beatdown)
-        ao_name = ao_mapping.get(beatdown.ao_id, beatdown.ao_id)
-
+    for parsed in parsed_beatdowns:
+        ao_name = ao_mapping.get(parsed.ao_id, parsed.ao_id)
         pax_count = parsed.pax_count or 0
         all_qs = [parsed.q_user_id] + (parsed.coq_user_id or [])
         q_names = [_get_q_display_name(q_user_id, user_mapping) for q_user_id in all_qs]
         date_str = _format_beatdown_date(parsed.bd_date)
         title = parsed.title or 'Untitled Beatdown'
-
-        # Keep track of highest attendance for this AO
         if ao_name not in ao_max_attendance or pax_count > ao_max_attendance[ao_name].attendance_count:
             ao_max_attendance[ao_name] = HighestAttendanceResult(
                 attendance_count=pax_count,
@@ -226,7 +169,6 @@ def analyze_highest_attendance_per_ao(
                 date=date_str,
                 title=title,
             )
-
     return ao_max_attendance
 
 
@@ -241,20 +183,20 @@ def get_weekly_summary(
         beatdowns: List of beatdown models
         user_mapping: Dictionary mapping user ID to display name
         ao_mapping: Dictionary mapping channel ID to AO name
-
     Returns:
         Dictionary with summary statistics
     """
-    pax_counts = analyze_pax_attendance(beatdowns)
-    ao_counts = analyze_ao_attendance(beatdowns, ao_mapping)
-    q_counts = analyze_q_counts(beatdowns, user_mapping)
-    ao_fngs = analyze_fngs_by_ao(beatdowns, ao_mapping)
+    # Parse all beatdowns once
+    parsed_beatdowns = [transform_sql_to_parsed_beatdown(bd) for bd in beatdowns]
+    pax_counts = analyze_pax_attendance(parsed_beatdowns)
+    ao_counts = analyze_ao_attendance(parsed_beatdowns, ao_mapping)
+    q_counts = analyze_q_counts(parsed_beatdowns, user_mapping)
+    ao_fngs = analyze_fngs_by_ao(parsed_beatdowns, ao_mapping)
     ao_max_attendance = analyze_highest_attendance_per_ao(
-        beatdowns,
+        parsed_beatdowns,
         ao_mapping,
         user_mapping,
     )
-
     return WeeklySummary(
         total_beatdowns=len(beatdowns),
         total_attendance=sum(ao_counts.values()),

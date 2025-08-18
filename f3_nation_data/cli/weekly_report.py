@@ -79,7 +79,7 @@ def generate_weekly_report(target_date: datetime | None = None) -> str:
     # Use current week if no target date provided
     if target_date is None:
         target_date = datetime.now(tz=UTC)
-    
+
     # Get week range
     week_start, week_end = get_week_range(target_date)
 
@@ -100,7 +100,11 @@ def generate_weekly_report(target_date: datetime | None = None) -> str:
 
         # Fetch beatdowns for the week
         logger.info('Fetching beatdowns...')
-        beatdowns = fetch_beatdowns_for_date_range(session, week_start, week_end)
+        beatdowns = fetch_beatdowns_for_date_range(
+            session,
+            week_start,
+            week_end,
+        )
 
         if not beatdowns:
             return f'No beatdowns found for week {week_start.strftime("%Y-%m-%d")} to {week_end.strftime("%Y-%m-%d")}'
