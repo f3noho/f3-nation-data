@@ -103,9 +103,14 @@ def analyze_pax_attendance(
     """Analyze PAX attendance counts from parsed beatdowns."""
     pax_counts = Counter()
     for parsed in parsed_beatdowns:
-        if parsed.pax:
-            for pax_id in parsed.pax:
-                pax_counts[pax_id] += 1
+        # Gather all PAX, Q, and Co-Qs for attendance
+        all_posters = set(parsed.pax or [])
+        if parsed.q_user_id:
+            all_posters.add(parsed.q_user_id)
+        if parsed.coq_user_id:
+            all_posters.update(parsed.coq_user_id)
+        for pax_id in all_posters:
+            pax_counts[pax_id] += 1
     return dict(pax_counts)
 
 
@@ -129,9 +134,15 @@ def analyze_q_counts(
     """Analyze Q (leadership) counts from parsed beatdowns."""
     q_counts = Counter()
     for parsed in parsed_beatdowns:
+        # Count main Q
         if parsed.q_user_id:
             q_name = user_mapping.get(parsed.q_user_id, parsed.q_user_id)
             q_counts[q_name] += 1
+        # Count Co-Qs
+        if parsed.coq_user_id:
+            for coq_id in parsed.coq_user_id:
+                coq_name = user_mapping.get(coq_id, coq_id)
+                q_counts[coq_name] += 1
     return dict(q_counts)
 
 
@@ -145,7 +156,9 @@ def analyze_fngs_by_ao(
         ao_name = ao_mapping.get(parsed.ao_id, parsed.ao_id)
         if parsed.fngs:
             # Remove '@' prefix from FNG names - some backblasts may include it
-            ao_fngs[ao_name].extend([fng.removeprefix('@') for fng in parsed.fngs])
+            ao_fngs[ao_name].extend(
+                [fng.removeprefix('@') for fng in parsed.fngs],
+            )
     return dict(ao_fngs)
 
 

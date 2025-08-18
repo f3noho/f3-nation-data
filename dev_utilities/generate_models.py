@@ -189,12 +189,12 @@ def generate_model_file(table_name: str, table_schema: TableSchema) -> str:
     timestamp = datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')
     primary_keys = table_schema.primary_key
 
-    # Prepare column data for template, excluding any fields in EXCLUDED_FIELDS
-    EXCLUDED_FIELDS = {'site_q_user_id'}  # Add more fields to exclude as needed
+    # Prepare column data for template, excluding any fields in excluded_fields
+    excluded_fields = {'site_q_user_id'}  # Add more fields to exclude as needed
     columns = [
         prepare_column_data(col_info, primary_keys)
         for col_info in table_schema.columns
-        if col_info['name'] not in EXCLUDED_FIELDS
+        if col_info['name'] not in excluded_fields
     ]
 
     # Determine what imports are needed
