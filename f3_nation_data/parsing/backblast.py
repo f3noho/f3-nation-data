@@ -49,6 +49,15 @@ class AnalyticsData:
     fng_count: int
 
 
+def _is_slack_id(item: str) -> str | None:
+    match = re.match(r'^<@([A-Z0-9]+)>$', item)
+    return match.group(1) if match else None
+
+
+def _is_valid_non_registered(item: str) -> bool:
+    return bool(item) and not item.startswith('<@') and item not in ['None', 'N/A']
+
+
 def extract_pax_from_string(pax_string: str) -> tuple[list[str], list[str]]:
     """Extract valid Slack IDs and non-registered names from a PAX string.
 
@@ -58,34 +67,22 @@ def extract_pax_from_string(pax_string: str) -> tuple[list[str], list[str]]:
     Returns:
         Tuple of (slack_ids, non_registered_names) lists with duplicates removed.
     """
-    slack_ids: list[str] = []
-    non_registered_names: list[str] = []
-
     if not pax_string.strip():
-        return list(slack_ids), list(non_registered_names)
+        return [], []
 
-    # Normalize spacing and split by commas
-    normalized = re.sub(r'\s+', ' ', pax_string.strip())
-    # Handle cases where slack IDs might be separated by spaces instead of commas
-    normalized = normalized.replace(' <@', ',<@')
-
-    # Split by commas and process each item
+    normalized = re.sub(r'\s+', ' ', pax_string.strip()).replace(' <@', ',<@')
     items = [item.strip() for item in normalized.split(',') if item.strip()]
 
+    slack_ids, non_registered_names = [], []
     for item in items:
-        # Check if it's a valid Slack user ID format: <@USERID>
-        slack_id_pattern = r'^<@([A-Z0-9]+)>$'
-        match = re.match(slack_id_pattern, item)
-        if match:
-            slack_id = match.group(1)
+        slack_id = _is_slack_id(item)
+        if slack_id:
             if slack_id not in slack_ids:
-                slack_ids.append(slack_id)  # Extract just the user ID part
-        elif item and not item.startswith('<@') and item not in ['None', 'N/A']:
-            # Non-registered name (not empty and not a malformed Slack ID)
-            if item not in non_registered_names:
-                non_registered_names.append(item)
+                slack_ids.append(slack_id)
+        elif _is_valid_non_registered(item) and item not in non_registered_names:
+            non_registered_names.append(item)
 
-    return list(slack_ids), list(non_registered_names)
+    return slack_ids, non_registered_names
 
 
 def extract_pax_count(backblast: str) -> int:
