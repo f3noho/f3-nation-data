@@ -27,21 +27,6 @@ from f3_nation_data.fetch import _timestamp_to_datetime, fetch_sql_beatdowns
 from f3_nation_data.models.sql.beatdown import SqlBeatDownModel
 
 
-def test_highest_attendance_result_model():
-    """Test HighestAttendanceResult Pydantic model."""
-    result = HighestAttendanceResult(
-        attendance_count=15,
-        q_name='Test Q',
-        date='03/15/2024',
-        title='Test Beatdown',
-    )
-
-    assert result.attendance_count == 15
-    assert result.q_name == 'Test Q'
-    assert result.date == '03/15/2024'
-    assert result.title == 'Test Beatdown'
-
-
 def test_get_user_mapping(f3_test_database: Engine):
     """Test user mapping retrieval."""
     with Session(f3_test_database) as session:
@@ -160,7 +145,8 @@ def test_analyze_highest_attendance_per_ao(f3_test_database: Engine):
                 assert isinstance(result, HighestAttendanceResult)
                 assert isinstance(result.attendance_count, int)
                 assert result.attendance_count >= 0
-                assert isinstance(result.q_name, str)
+                assert isinstance(result.q_names, list)
+                assert all(isinstance(q_name, str) for q_name in result.q_names)
                 assert isinstance(result.date, str)
                 assert isinstance(result.title, str)
 
@@ -353,6 +339,7 @@ def test_analyze_highest_attendance_invalid_date():
     mock_parsed = Mock()
     mock_parsed.pax_count = 5
     mock_parsed.q_user_id = 'U04SUMEGFRV'
+    mock_parsed.coq_user_id = []  # Ensure this is a list, not a Mock
     mock_parsed.bd_date = '2020-02-30'  # Invalid date (Feb 30th doesn't exist)
     mock_parsed.title = 'Test Beatdown'
 
@@ -377,7 +364,7 @@ def test_analyze_highest_attendance_invalid_date():
         fort_result = result['The Fort']
         assert isinstance(fort_result, HighestAttendanceResult)
         assert fort_result.attendance_count == 5
-        assert fort_result.q_name == 'Steubie'
+        assert fort_result.q_names == ['Steubie']
         assert fort_result.date == 'Unknown Date'  # Should fallback to 'Unknown Date'
         assert fort_result.title == 'Test Beatdown'
 
