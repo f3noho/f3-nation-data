@@ -23,6 +23,7 @@ from f3_nation_data.analytics import (
     get_weekly_summary,
 )
 from f3_nation_data.fetch import _timestamp_to_datetime, fetch_sql_beatdowns
+from f3_nation_data.models.parsed.beatdown import ParsedBeatdown
 from f3_nation_data.models.sql.beatdown import SqlBeatDownModel
 from f3_nation_data.parsing.backblast import transform_sql_to_parsed_beatdown
 
@@ -369,3 +370,33 @@ def test_analyze_highest_attendance_invalid_date():
     assert fort_result.q_names == ['Steubie']
     assert fort_result.date == 'Unknown Date'  # Should fallback to 'Unknown Date'
     assert fort_result.title == 'Test Beatdown'
+
+
+def test_q_and_pax_overlap():
+    """Test attendance and Q counting when Q/Co-Q are also in PAX."""
+    # Slack IDs
+    slack_id = 'U12345'
+    coq_id = 'U67890'
+    # Sample beatdown: Q is also in PAX, plus a Co-Q
+    parsed = ParsedBeatdown(
+        timestamp='2025-08-18T12:00:00Z',
+        raw_backblast='Test backblast content',
+        ao_id='C1',
+        pax=[slack_id, coq_id],
+        q_user_id=slack_id,
+        coq_user_id=[coq_id],
+        fngs=[],
+        bd_date='2025-08-18',
+        pax_count=2,
+        title='Overlap Test',
+        word_count=10,
+        workout_type='bootcamp',
+    )
+    # User mapping
+    user_mapping = {slack_id: 'QMan', coq_id: 'CoQMan'}
+    # Should count Q and Co-Q correctly, and attendance only once per user
+    pax_counts = analyze_pax_attendance([parsed])
+    q_counts = analyze_q_counts([parsed], user_mapping)
+
+    assert pax_counts == {slack_id: 1, coq_id: 1}
+    assert q_counts == {'QMan': 1, 'CoQMan': 1}
