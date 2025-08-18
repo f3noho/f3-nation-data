@@ -1,0 +1,346 @@
+"""Analytics and metrics engine for F3 Nation data.
+
+This module provides analytics functions for beatdown data, including:
+- PAX attendance analysis
+- AO performance metrics
+- Q leadership statistics
+- FNG tracking
+- Weekly/monthly summaries
+"""
+
+from collections import Counter, defaultdict
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, Any
+
+from pydantic import BaseModel
+
+from .fetch import fetch_sql_aos, fetch_sql_users
+from .models.sql.beatdown import SqlBeatDownModel
+from .parsing.backblast import transform_sql_to_parsed_beatdown
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
+
+class HighestAttendanceResult(BaseModel):
+    """Result model for highest attendance analysis per AO."""
+
+    attendance_count: int
+    q_name: str
+    date: str
+    title: str
+
+
+def get_user_mapping(session: 'Session') -> dict[str, str]:
+    """Get mapping of user IDs to display names.
+
+    Args:
+        session: SQLAlchemy session for database queries
+
+    Returns:
+        Dictionary mapping user ID to display name (F3 name or real name)
+    """
+    user_mapping = {}
+    users = fetch_sql_users(session)
+    for user in users:
+        # Prefer F3 name (user_name), fall back to real_name, then user_id
+        display_name = user.user_name or user.real_name or user.user_id
+        user_mapping[user.user_id] = display_name
+    return user_mapping
+
+
+def get_ao_mapping(session: 'Session') -> dict[str, str]:
+    """Get mapping of channel IDs to AO names.
+
+    Args:
+        session: SQLAlchemy session for database queries
+
+    Returns:
+        Dictionary mapping channel ID to AO name
+    """
+    ao_mapping = {}
+    aos = fetch_sql_aos(session)
+    for ao in aos:
+        ao_mapping[ao.channel_id] = ao.ao
+    return ao_mapping
+
+
+def analyze_pax_attendance(beatdowns: list[SqlBeatDownModel]) -> dict[str, int]:
+    """Analyze PAX attendance counts.
+
+    Args:
+        beatdowns: List of beatdown models
+
+    Returns:
+        Dictionary mapping PAX user ID to attendance count
+    """
+    pax_counts = Counter()
+
+    for beatdown in beatdowns:
+        parsed = transform_sql_to_parsed_beatdown(beatdown)
+        if parsed.pax:
+            for pax_id in parsed.pax:
+                pax_counts[pax_id] += 1
+
+    return dict(pax_counts)
+
+
+def analyze_ao_attendance(
+    beatdowns: list[SqlBeatDownModel],
+    ao_mapping: dict[str, str],
+) -> dict[str, int]:
+    """Analyze unique PAX attendance by AO.
+
+    Args:
+        beatdowns: List of beatdown models
+        ao_mapping: Dictionary mapping channel ID to AO name
+
+    Returns:
+        Dictionary mapping AO name to unique PAX count
+    """
+    ao_unique_pax = defaultdict(set)
+
+    for beatdown in beatdowns:
+        parsed = transform_sql_to_parsed_beatdown(beatdown)
+        ao_name = ao_mapping.get(beatdown.ao_id, beatdown.ao_id)
+
+        if parsed.pax:
+            ao_unique_pax[ao_name].update(parsed.pax)
+
+    # Convert sets to counts
+    return {ao_name: len(pax_set) for ao_name, pax_set in ao_unique_pax.items()}
+
+
+def analyze_q_counts(
+    beatdowns: list[SqlBeatDownModel],
+    user_mapping: dict[str, str],
+) -> dict[str, int]:
+    """Analyze Q (leadership) counts.
+
+    Args:
+        beatdowns: List of beatdown models
+        user_mapping: Dictionary mapping user ID to display name
+
+    Returns:
+        Dictionary mapping Q name to count of beatdowns they led
+    """
+    q_counts = Counter()
+
+    for beatdown in beatdowns:
+        parsed = transform_sql_to_parsed_beatdown(beatdown)
+        if parsed.q_user_id:
+            q_name = user_mapping.get(parsed.q_user_id, parsed.q_user_id)
+            q_counts[q_name] += 1
+
+    return dict(q_counts)
+
+
+def analyze_fngs_by_ao(
+    beatdowns: list[SqlBeatDownModel],
+    ao_mapping: dict[str, str],
+) -> dict[str, list[str]]:
+    """Analyze FNGs (First Name Guys) by AO.
+
+    Args:
+        beatdowns: List of beatdown models
+        ao_mapping: Dictionary mapping channel ID to AO name
+
+    Returns:
+        Dictionary mapping AO name to list of FNG names
+    """
+    ao_fngs = defaultdict(list)
+
+    for beatdown in beatdowns:
+        parsed = transform_sql_to_parsed_beatdown(beatdown)
+        ao_name = ao_mapping.get(beatdown.ao_id, beatdown.ao_id)
+
+        if parsed.fngs:
+            ao_fngs[ao_name].extend(parsed.fngs)
+
+    return dict(ao_fngs)
+
+
+def analyze_highest_attendance_per_ao(
+    beatdowns: list[SqlBeatDownModel],
+    ao_mapping: dict[str, str],
+    user_mapping: dict[str, str],
+) -> dict[str, HighestAttendanceResult]:
+    """Find the highest attended beatdown per AO.
+
+    Args:
+        beatdowns: List of beatdown models
+        ao_mapping: Dictionary mapping channel ID to AO name
+        user_mapping: Dictionary mapping user ID to display name
+
+    Returns:
+        Dictionary mapping AO name to HighestAttendanceResult
+    """
+    ao_max_attendance = {}
+
+    for beatdown in beatdowns:
+        parsed = transform_sql_to_parsed_beatdown(beatdown)
+        ao_name = ao_mapping.get(beatdown.ao_id, beatdown.ao_id)
+
+        pax_count = parsed.pax_count or 0
+        q_name = user_mapping.get(parsed.q_user_id, 'Unknown Q') if parsed.q_user_id else 'Unknown Q'
+
+        # Format date
+        date_str = 'Unknown Date'
+        if parsed.bd_date:
+            try:
+                # bd_date is always a string in YYYY-MM-DD format from parsed model
+                date_obj = datetime.strptime(
+                    parsed.bd_date,
+                    '%Y-%m-%d',
+                ).replace(tzinfo=UTC)
+                date_str = date_obj.strftime('%m/%d/%Y')
+            except (ValueError, TypeError):
+                date_str = 'Unknown Date'
+
+        title = parsed.title or 'Untitled Beatdown'
+
+        # Keep track of highest attendance for this AO
+        if ao_name not in ao_max_attendance or pax_count > ao_max_attendance[ao_name].attendance_count:
+            ao_max_attendance[ao_name] = HighestAttendanceResult(
+                attendance_count=pax_count,
+                q_name=q_name,
+                date=date_str,
+                title=title,
+            )
+
+    return ao_max_attendance
+
+
+def get_weekly_summary(
+    beatdowns: list[SqlBeatDownModel],
+    user_mapping: dict[str, str],
+    ao_mapping: dict[str, str],
+) -> dict[str, Any]:
+    """Get comprehensive weekly summary statistics.
+
+    Args:
+        beatdowns: List of beatdown models
+        user_mapping: Dictionary mapping user ID to display name
+        ao_mapping: Dictionary mapping channel ID to AO name
+
+    Returns:
+        Dictionary with summary statistics
+    """
+    pax_counts = analyze_pax_attendance(beatdowns)
+    ao_counts = analyze_ao_attendance(beatdowns, ao_mapping)
+    q_counts = analyze_q_counts(beatdowns, user_mapping)
+    ao_fngs = analyze_fngs_by_ao(beatdowns, ao_mapping)
+    ao_max_attendance = analyze_highest_attendance_per_ao(
+        beatdowns,
+        ao_mapping,
+        user_mapping,
+    )
+
+    return {
+        'total_beatdowns': len(beatdowns),
+        'total_attendance': sum(ao_counts.values()),
+        'unique_pax': len(pax_counts),
+        'pax_counts': pax_counts,
+        'ao_counts': ao_counts,
+        'q_counts': q_counts,
+        'ao_fngs': ao_fngs,
+        'ao_max_attendance': ao_max_attendance,
+        'top_pax': sorted(pax_counts.items(), key=lambda x: x[1], reverse=True)[:10],
+        'top_aos': sorted(ao_counts.items(), key=lambda x: x[1], reverse=True),
+        'top_qs': [
+            (q, count)
+            for q, count in sorted(
+                q_counts.items(),
+                key=lambda x: x[1],
+                reverse=True,
+            )
+            if count >= 2
+        ],
+    }
+
+
+def get_beatdown_details(
+    beatdown: SqlBeatDownModel,
+    user_mapping: dict[str, str],
+    ao_mapping: dict[str, str],
+) -> dict[str, Any]:
+    """Get detailed information about a specific beatdown.
+
+    Args:
+        beatdown: Beatdown model
+        user_mapping: Dictionary mapping user ID to display name
+        ao_mapping: Dictionary mapping channel ID to AO name
+
+    Returns:
+        Dictionary with beatdown details
+    """
+    parsed = transform_sql_to_parsed_beatdown(beatdown)
+
+    return {
+        'timestamp': beatdown.timestamp,
+        'ao_name': ao_mapping.get(beatdown.ao_id, beatdown.ao_id),
+        'q_name': user_mapping.get(parsed.q_user_id, 'Unknown Q') if parsed.q_user_id else 'Unknown Q',
+        'title': parsed.title or 'Untitled Beatdown',
+        'date': parsed.bd_date,
+        'pax_count': parsed.pax_count or 0,
+        'pax_names': [user_mapping.get(pax_id, pax_id) for pax_id in (parsed.pax or [])],
+        'fng_names': parsed.fngs or [],
+        'workout_type': parsed.workout_type or 'bootcamp',
+        'word_count': parsed.word_count or 0,
+    }
+
+
+# Convenience functions for common analytics tasks
+def get_week_range(date: datetime | None = None) -> tuple[datetime, datetime]:
+    """Get the start and end of a week (Monday to Sunday).
+
+    Args:
+        date: Date within the week (defaults to today)
+
+    Returns:
+        Tuple of (week_start, week_end) datetime objects
+    """
+    if date is None:
+        date = datetime.now(tz=UTC)
+
+    # Calculate days since Monday (0=Monday, 6=Sunday)
+    days_since_monday = date.weekday()
+    week_start = date - timedelta(days=days_since_monday)
+    week_end = week_start + timedelta(days=6)
+
+    # Set to start/end of day
+    week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_end = week_end.replace(
+        hour=23,
+        minute=59,
+        second=59,
+        microsecond=999999,
+    )
+
+    return week_start, week_end
+
+
+def get_month_range(date: datetime | None = None) -> tuple[datetime, datetime]:
+    """Get the start and end of a month.
+
+    Args:
+        date: Date within the month (defaults to today)
+
+    Returns:
+        Tuple of (month_start, month_end) datetime objects
+    """
+    if date is None:
+        date = datetime.now(tz=UTC)
+
+    # First day of the month
+    month_start = date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    # Last day of the month
+    if month_start.month == 12:
+        next_month = month_start.replace(year=month_start.year + 1, month=1)
+    else:
+        next_month = month_start.replace(month=month_start.month + 1)
+
+    month_end = next_month - timedelta(microseconds=1)
+
+    return month_start, month_end
