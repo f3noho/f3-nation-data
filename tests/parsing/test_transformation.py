@@ -95,6 +95,7 @@ class TransformTestCase:
 def test_transform_sql_to_parsed_beatdown(tcase: TransformTestCase):
     """Test transformation from SQL model to parsed beatdown."""  # Create SQL model
     sql_bd = SqlBeatDownModel(
+        ao_id='C04TYQEEGHM',  # Example AO ID
         timestamp=tcase.sql_timestamp,
         ts_edited=tcase.sql_ts_edited,
         backblast=tcase.sql_backblast,

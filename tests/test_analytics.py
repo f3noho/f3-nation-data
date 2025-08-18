@@ -6,7 +6,6 @@ from unittest.mock import Mock
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-import f3_nation_data.analytics as analytics_module
 from f3_nation_data.analytics import (
     BeatdownDetails,
     HighestAttendanceResult,
@@ -25,6 +24,7 @@ from f3_nation_data.analytics import (
 )
 from f3_nation_data.fetch import _timestamp_to_datetime, fetch_sql_beatdowns
 from f3_nation_data.models.sql.beatdown import SqlBeatDownModel
+from f3_nation_data.parsing.backblast import transform_sql_to_parsed_beatdown
 
 
 def test_get_user_mapping(f3_test_database: Engine):
@@ -62,7 +62,9 @@ def test_analyze_pax_attendance(f3_test_database: Engine):
     """Test PAX attendance analysis."""
     with Session(f3_test_database) as session:
         beatdowns = fetch_sql_beatdowns(session)
-        pax_counts = analyze_pax_attendance(beatdowns)
+        pax_counts = analyze_pax_attendance(
+            [transform_sql_to_parsed_beatdown(bd) for bd in beatdowns],
+        )
 
         # Should return dict with user IDs and counts
         assert isinstance(pax_counts, dict)
@@ -79,7 +81,10 @@ def test_analyze_ao_attendance(f3_test_database: Engine):
     with Session(f3_test_database) as session:
         beatdowns = fetch_sql_beatdowns(session)
         ao_mapping = get_ao_mapping(session)
-        ao_counts = analyze_ao_attendance(beatdowns, ao_mapping)
+        ao_counts = analyze_ao_attendance(
+            [transform_sql_to_parsed_beatdown(bd) for bd in beatdowns],
+            ao_mapping,
+        )
 
         # Should return dict with AO names and unique PAX counts
         assert isinstance(ao_counts, dict)
@@ -111,7 +116,10 @@ def test_analyze_fngs_by_ao(f3_test_database: Engine):
     with Session(f3_test_database) as session:
         beatdowns = fetch_sql_beatdowns(session)
         ao_mapping = get_ao_mapping(session)
-        ao_fngs = analyze_fngs_by_ao(beatdowns, ao_mapping)
+        ao_fngs = analyze_fngs_by_ao(
+            [transform_sql_to_parsed_beatdown(bd) for bd in beatdowns],
+            ao_mapping,
+        )
 
         # Should return dict with AO names and FNG lists
         assert isinstance(ao_fngs, dict)
@@ -129,7 +137,7 @@ def test_analyze_highest_attendance_per_ao(f3_test_database: Engine):
         user_mapping = get_user_mapping(session)
 
         ao_max = analyze_highest_attendance_per_ao(
-            beatdowns,
+            [transform_sql_to_parsed_beatdown(bd) for bd in beatdowns],
             ao_mapping,
             user_mapping,
         )
@@ -304,7 +312,7 @@ def test_date_parsing_error_handling():
 
     # This should not crash, even with invalid date
     result = analyze_highest_attendance_per_ao(
-        [mock_beatdown],
+        [transform_sql_to_parsed_beatdown(mock_beatdown)],
         ao_mapping,
         user_mapping,
     )
@@ -337,37 +345,27 @@ def test_analyze_highest_attendance_invalid_date():
 
     # Mock parsed beatdown with invalid date
     mock_parsed = Mock()
+    mock_parsed.ao_id = 'C04TYQEEGHM'
     mock_parsed.pax_count = 5
     mock_parsed.q_user_id = 'U04SUMEGFRV'
     mock_parsed.coq_user_id = []  # Ensure this is a list, not a Mock
     mock_parsed.bd_date = '2020-02-30'  # Invalid date (Feb 30th doesn't exist)
     mock_parsed.title = 'Test Beatdown'
 
-    # Mock the transform function to return our mock parsed beatdown
-    original_transform = analytics_module.transform_sql_to_parsed_beatdown
-    analytics_module.transform_sql_to_parsed_beatdown = Mock(
-        return_value=mock_parsed,
+    ao_mapping = {'C04TYQEEGHM': 'The Fort'}
+    user_mapping = {'U04SUMEGFRV': 'Steubie'}
+
+    result = analyze_highest_attendance_per_ao(
+        [mock_parsed],
+        ao_mapping,
+        user_mapping,
     )
 
-    try:
-        ao_mapping = {'C04TYQEEGHM': 'The Fort'}
-        user_mapping = {'U04SUMEGFRV': 'Steubie'}
-
-        result = analyze_highest_attendance_per_ao(
-            [mock_beatdown],
-            ao_mapping,
-            user_mapping,
-        )
-
-        # Should handle invalid date gracefully
-        assert 'The Fort' in result
-        fort_result = result['The Fort']
-        assert isinstance(fort_result, HighestAttendanceResult)
-        assert fort_result.attendance_count == 5
-        assert fort_result.q_names == ['Steubie']
-        assert fort_result.date == 'Unknown Date'  # Should fallback to 'Unknown Date'
-        assert fort_result.title == 'Test Beatdown'
-
-    finally:
-        # Restore original function
-        analytics_module.transform_sql_to_parsed_beatdown = original_transform
+    # Should handle invalid date gracefully
+    assert 'The Fort' in result
+    fort_result = result['The Fort']
+    assert isinstance(fort_result, HighestAttendanceResult)
+    assert fort_result.attendance_count == 5
+    assert fort_result.q_names == ['Steubie']
+    assert fort_result.date == 'Unknown Date'  # Should fallback to 'Unknown Date'
+    assert fort_result.title == 'Test Beatdown'
