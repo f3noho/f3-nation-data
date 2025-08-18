@@ -16,6 +16,9 @@ dependencies = [
     "structlog>=25.4.0, <26",
 ]
 
+[project.scripts]
+f3-weekly-report = "f3_nation_data.cli.weekly_report:main"
+
 [dependency-groups]
 dev = [
     "poethepoet>=0.37.0",

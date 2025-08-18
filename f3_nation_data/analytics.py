@@ -263,7 +263,14 @@ def get_weekly_summary(
         q_counts=q_counts,
         ao_fngs=ao_fngs,
         ao_max_attendance=ao_max_attendance,
-        top_pax=sorted(pax_counts.items(), key=lambda x: x[1], reverse=True)[:10],
+        top_pax=[
+            (user_mapping.get(user_id, user_id), count)
+            for user_id, count in sorted(
+                pax_counts.items(),
+                key=lambda x: x[1],
+                reverse=True,
+            )[:10]
+        ],
         top_aos=sorted(ao_counts.items(), key=lambda x: x[1], reverse=True),
         top_qs=[
             (q, count)
