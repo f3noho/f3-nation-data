@@ -4,7 +4,7 @@ This module provides functions to query and fetch F3 data from SQL databases,
 with support for incremental syncing and time-based filtering.
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
@@ -12,6 +12,33 @@ from sqlalchemy.orm import Session
 from f3_nation_data.models.sql.ao import SqlAOModel
 from f3_nation_data.models.sql.beatdown import SqlBeatDownModel
 from f3_nation_data.models.sql.user import SqlUserModel
+
+
+def _datetime_to_timestamp(dt: datetime) -> str:
+    """Convert a datetime object to Unix timestamp string format used by the database.
+
+    This ensures consistent timestamp format across all database operations.
+    The database stores timestamps as Unix timestamps in string format.
+
+    Args:
+        dt: Datetime object to convert
+
+    Returns:
+        Unix timestamp as string (e.g., "1710009857.949729")
+    """
+    return str(dt.timestamp())
+
+
+def _timestamp_to_datetime(timestamp_str: str) -> datetime:
+    """Convert a Unix timestamp string back to a datetime object.
+
+    Args:
+        timestamp_str: Unix timestamp as string (e.g., "1710009857.949729")
+
+    Returns:
+        Corresponding datetime object
+    """
+    return datetime.fromtimestamp(float(timestamp_str), tz=UTC)
 
 
 def fetch_sql_beatdowns(
@@ -89,8 +116,9 @@ def fetch_beatdowns_for_date_range(
     Returns:
         List of SqlBeatDownModel instances within the date range.
     """
-    start_timestamp = start_date.strftime('%Y-%m-%d %H:%M:%S')
-    end_timestamp = end_date.strftime('%Y-%m-%d %H:%M:%S')
+    # Convert datetime objects to Unix timestamps (as strings) to match database format
+    start_timestamp = _datetime_to_timestamp(start_date)
+    end_timestamp = _datetime_to_timestamp(end_date)
 
     query = sa.select(SqlBeatDownModel).where(
         (SqlBeatDownModel.timestamp >= start_timestamp) & (SqlBeatDownModel.timestamp < end_timestamp),
@@ -102,7 +130,7 @@ def fetch_beatdowns_for_date_range(
 
 def fetch_sql_users(
     session: Session,
-    user_ids: list[int] | None = None,
+    user_ids: list[str] | None = None,
 ) -> list[SqlUserModel]:
     """Fetch User data from the SQL database.
 
