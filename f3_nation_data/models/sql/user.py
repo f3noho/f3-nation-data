@@ -1,7 +1,7 @@
 """Auto-generated SQLAlchemy model for users table.
 
 This file was automatically generated from the F3 Nation database schema.
-Generated on: 2025-08-16 21:41:25 UTC
+Generated on: 2025-08-18 22:17:51 UTC
 
 DO NOT EDIT MANUALLY - Use dev_utilities/generate_models.py to regenerate.
 Auto-formatted with toolbelt for consistent code style.
