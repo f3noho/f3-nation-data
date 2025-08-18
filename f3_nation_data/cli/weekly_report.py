@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -22,6 +23,23 @@ from f3_nation_data.fetch import fetch_beatdowns_for_date_range
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger(__name__)
+
+
+REGION_MAP = {
+    'f3noho': ('F3 NoHo', ':noho:'),
+    'f3lakehouston': ('F3 Lake Houston', ':f3-logo-black:'),
+    'f3northwestpassage': ('F3 North West Passage', ':northwest-passage:'),
+}
+
+class MissingF3NationDatabaseError(Exception):
+    """Custom exception for missing F3_NATION_DATABASE environment variable."""
+
+    def __init__(self):
+        """Initialize with a custom error message."""
+        msg = (
+            'F3_NATION_DATABASE environment variable is not set. Please set it to your F3 region name.'
+        )
+        super().__init__(msg)
 
 
 def parse_date_argument(date_str: str) -> datetime:
@@ -115,23 +133,37 @@ def generate_weekly_report(target_date: datetime | None = None) -> str:
         logger.info('Analyzing data...')
         summary = get_weekly_summary(beatdowns, user_mapping, ao_mapping)
 
-        # Load template
-        template_dir = Path(__file__).parent / 'templates'
-        env = Environment(
-            loader=FileSystemLoader(template_dir),
-            autoescape=False,  # noqa: S701 - Safe for text reports, not web content
-        )
-        template = env.get_template('weekly_report.txt')
+    # Determine region title and emoji from DB name
 
-        # Format data for template
-        template_data = {
-            'week_start': week_start,
-            'week_end': week_end,
-            'summary': format_weekly_summary_for_template(summary),
-        }
+    db_name = os.environ.get('F3_NATION_DATABASE', '').lower()
+    region_title, region_emoji = REGION_MAP.get(
+        db_name,
+        (db_name, ''),
+    )
+    if not db_name:
+        raise MissingF3NationDatabaseError
 
-        # Render report
-        return template.render(**template_data)
+    # Load template
+    template_dir = Path(__file__).parent / 'templates'
+    env = Environment(
+        loader=FileSystemLoader(template_dir),
+        autoescape=False,  # noqa: S701 - Safe for text reports, not web content
+    )
+    # Add custom filter to prefix @ using a lambda
+    env.filters['at_prefix'] = lambda names: [f'@{name}' for name in names]
+    template = env.get_template('weekly_report.txt')
+
+    # Format data for template
+    template_data = {
+        'week_start': week_start,
+        'week_end': week_end,
+        'summary': format_weekly_summary_for_template(summary),
+        'region_title': region_title,
+        'region_emoji': region_emoji,
+    }
+
+    # Render report
+    return template.render(**template_data)
 
 
 def main() -> None:
