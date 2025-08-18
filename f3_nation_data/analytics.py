@@ -144,7 +144,8 @@ def analyze_fngs_by_ao(
     for parsed in parsed_beatdowns:
         ao_name = ao_mapping.get(parsed.ao_id, parsed.ao_id)
         if parsed.fngs:
-            ao_fngs[ao_name].extend(parsed.fngs)
+            # Remove '@' prefix from FNG names - some backblasts may include it
+            ao_fngs[ao_name].extend([fng.removeprefix('@') for fng in parsed.fngs])
     return dict(ao_fngs)
 
 
