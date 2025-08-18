@@ -113,7 +113,10 @@ def generate_weekly_report(target_date: datetime | None = None) -> str:
 
         # Load template
         template_dir = Path(__file__).parent / 'templates'
-        env = Environment(loader=FileSystemLoader(template_dir), autoescape=True)
+        env = Environment(
+            loader=FileSystemLoader(template_dir),
+            autoescape=False,  # noqa: S701 - Safe for text reports, not web content
+        )
         template = env.get_template('weekly_report.txt')
 
         # Format data for template

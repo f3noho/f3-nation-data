@@ -5,15 +5,15 @@ Week of {{ week_start.strftime('%B %d') }} - {{ week_end.strftime('%B %d, %Y') }
 
 {% if summary.ao_fngs -%}
 :fng: New Guys (FNGs) by AO:
-{% for ao_name, fngs in summary.ao_fngs.items() -%}
-{% if fngs -%}
+{%- for ao_name, fngs in summary.ao_fngs.items() -%}
+{% if fngs %}
 • #{{ ao_name.lower() }}:
-{% for fng in fngs -%}
+{%- for fng in fngs %}
   • @{{ fng }}
-{% endfor -%}
+{%- endfor -%}
 {% endif -%}
 {% endfor -%}
-{% endif -%}
+{% endif %}
 
 {% if summary.ao_max_attendance -%}
 📈 Highest Attended Workout at Each AO:
@@ -22,14 +22,14 @@ Week of {{ week_start.strftime('%B %d') }} - {{ week_end.strftime('%B %d, %Y') }
 {% endfor -%}
 {% endif -%}
 
-{% if summary.top_pax -%}
+{% if summary.top_pax %}
 💪 Top HIMs Who Posted This Week:
 {% for pax_name, count in summary.top_pax -%}
 {{ count }} @{{ pax_name }}
 {% endfor -%}
 {% endif -%}
 
-{% if summary.top_qs -%}
+{% if summary.top_qs %}
 👑 Leaders in Q Counts:
 {% for q_name, count in summary.top_qs -%}
 {{ count }} @{{ q_name }}
@@ -39,7 +39,7 @@ Week of {{ week_start.strftime('%B %d') }} - {{ week_end.strftime('%B %d, %Y') }
 • No one has Q'd 2 or more times this week
 {% endif -%}
 
-{% if summary.top_aos -%}
+{% if summary.top_aos %}
 🏆 AO Rankings by Unique PAX:
 {% for ao_name, count in summary.top_aos -%}
 {{ "%2d"|format(count) }} #{{ ao_name.lower() }}
