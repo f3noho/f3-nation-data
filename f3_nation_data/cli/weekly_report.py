@@ -31,14 +31,13 @@ REGION_MAP = {
     'f3northwestpassage': ('F3 North West Passage', ':northwest-passage:'),
 }
 
+
 class MissingF3NationDatabaseError(Exception):
     """Custom exception for missing F3_NATION_DATABASE environment variable."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize with a custom error message."""
-        msg = (
-            'F3_NATION_DATABASE environment variable is not set. Please set it to your F3 region name.'
-        )
+        msg = 'F3_NATION_DATABASE environment variable is not set. Please set it to your F3 region name.'
         super().__init__(msg)
 
 
