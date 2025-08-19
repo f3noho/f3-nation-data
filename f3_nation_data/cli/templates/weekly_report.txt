@@ -1,0 +1,48 @@
+
+{{ region_emoji }} {{ region_title }} Weekly Beatdown Report
+Week of {{ week_start.strftime('%B %d') }} - {{ week_end.strftime('%B %d, %Y') }}
+
+📊 Week Summary: {{ summary.total_beatdowns }} beatdowns, {{ summary.total_attendance }} total attendance, {{ summary.unique_pax }} unique PAX
+
+{% if summary.ao_fngs -%}
+:fng: New Guys (FNGs) by AO:
+{%- for ao_name, fngs in summary.ao_fngs.items() -%}
+{% if fngs %}
+- #{{ ao_name.lower() }}:
+{%- for fng in fngs %}
+  - {{ fng }}
+{%- endfor -%}
+{% endif -%}
+{% endfor -%}
+{% endif %}
+
+{% if summary.ao_max_attendance -%}
+📈 Highest Attended Workout at Each AO:
+{% for ao_name, result in summary.ao_max_attendance.items() | sort(attribute='1.attendance_count', reverse=true) -%}
+{{ "%2d"|format(result.attendance_count) }} #{{ ao_name.lower() }} (Q: {{ result.q_names | at_prefix | join(', ') }}) on {{ result.date }} - {{ result.title.replace('Backblast!', '').strip() }}
+{% endfor -%}
+{% endif -%}
+
+{% if summary.top_pax %}
+💪 Top HIMs Who Posted This Week:
+{% for pax_name, count in summary.top_pax -%}
+{{ count }} @{{ pax_name }}
+{% endfor -%}
+{% endif -%}
+
+{% if summary.top_qs %}
+👑 Leaders in Q Counts:
+{% for q_name, count in summary.top_qs -%}
+{{ count }} @{{ q_name }}
+{% endfor -%}
+{% else -%}
+👑 Leaders in Q Counts:
+• No one has Q'd 2 or more times this week
+{% endif -%}
+
+{% if summary.top_aos %}
+🏆 AO Rankings by Unique PAX:
+{% for ao_name, count in summary.top_aos -%}
+{{ "%2d"|format(count) }} #{{ ao_name.lower() }}
+{% endfor -%}
+{% endif %}

@@ -18,5 +18,6 @@ exclude_lines =
     def __repr__
     raise AssertionError
     raise NotImplementedError
+    if TYPE_CHECKING
     if __name__ == '__main__'
 show_missing = true
