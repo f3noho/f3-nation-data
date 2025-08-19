@@ -72,6 +72,59 @@ with db_session() as session:
     # Session automatically commits and closes
 ```
 
+## Command-Line Interface (CLI)
+
+This project provides a CLI tool for generating weekly F3 Nation beatdown
+reports directly from your database.
+
+### Features
+
+- Generate a weekly report for any week (default: current week)
+- Region-agnostic analytics and reporting
+- Robust error handling and clear output
+- Options for specifying week, showing version, and more
+
+### Usage
+
+To run the CLI and generate a weekly report:
+
+```bash
+uvx --from f3-nation-data weekly_report [DATE]
+```
+
+- `DATE` (optional): Any date within the target week (format: `YYYY-MM-DD`). If
+  omitted, the current week is used.
+
+#### Example
+
+```bash
+uvx --from f3-nation-data weekly_report 2024-03-09
+```
+
+#### Options
+
+- `--date YYYY-MM-DD` : Specify the week by date
+- `--version` : Show CLI version and exit
+
+### Output
+
+The CLI prints a formatted weekly report to stdout, including:
+
+- Week summary (beatdowns, attendance, unique PAX)
+- Highest attended workout at each AO
+- Top HIMs who posted
+- Leaders in Q counts
+- AO rankings by unique PAX
+
+### Error Handling
+
+- Invalid date format: clear error message and exit
+- Missing environment variable: clear error message and exit
+- No beatdowns found: clear message and exit
+
+See the [tests](tests/test_weekly_report_cli.py) for examples of CLI output and
+error handling.
+
 ## Development
 
 ### Generating SQL Models
