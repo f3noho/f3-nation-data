@@ -78,22 +78,29 @@ def test_analyze_pax_attendance(f3_test_database: Engine):
 
 
 def test_analyze_ao_attendance(f3_test_database: Engine):
-    """Test AO attendance analysis."""
+    """Test AO attendance analysis, including Qs and Co-Qs in posts."""
     with Session(f3_test_database) as session:
         beatdowns = fetch_sql_beatdowns(session)
         ao_mapping = get_ao_mapping(session)
-        ao_counts = analyze_ao_attendance(
+        ao_stats = analyze_ao_attendance(
             [transform_sql_to_parsed_beatdown(bd) for bd in beatdowns],
             ao_mapping,
         )
 
-        # Should return dict with AO names and unique PAX counts
-        assert isinstance(ao_counts, dict)
-
-        if ao_counts:
-            assert all(isinstance(ao_name, str) for ao_name in ao_counts)
-            assert all(isinstance(count, int) for count in ao_counts.values())
-            assert all(count >= 0 for count in ao_counts.values())
+        # Should return dict with AO names and AOStats objects
+        assert isinstance(ao_stats, dict)
+        if ao_stats:
+            for ao_name, stats in ao_stats.items():
+                assert isinstance(ao_name, str)
+                assert hasattr(stats, 'total_posts')
+                assert hasattr(stats, 'total_beatdowns')
+                assert hasattr(stats, 'unique_pax')
+                # total_posts should be >= unique_pax_count (since Qs/Co-Qs may overlap)
+                assert stats.total_posts >= stats.unique_pax_count()
+                # total_posts should be >= total_beatdowns (at least one post per beatdown)
+                assert stats.total_posts >= stats.total_beatdowns
+                # unique_pax should be a set
+                assert isinstance(stats.unique_pax, set)
 
 
 def test_analyze_q_counts(f3_test_database: Engine):

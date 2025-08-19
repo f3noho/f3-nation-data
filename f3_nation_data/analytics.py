@@ -9,6 +9,7 @@ This module provides analytics functions for beatdown data, including:
 """
 
 from collections import Counter, defaultdict
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -44,7 +45,7 @@ class WeeklySummary(BaseModel):
     ao_fngs: dict[str, list[str]]
     ao_max_attendance: dict[str, HighestAttendanceResult]
     top_pax: list[tuple[str, int]]
-    top_aos: list[tuple[str, int]]
+    top_aos: list['AOStats']
     top_qs: list[tuple[str, int]]
 
 
@@ -61,6 +62,20 @@ class BeatdownDetails(BaseModel):
     fng_names: list[str]
     workout_type: str
     word_count: int
+
+
+@dataclass
+class AOStats:
+    """Data model for AO statistics, used for aggregation and reporting."""
+
+    ao_name: str
+    total_beatdowns: int = 0
+    total_posts: int = 0
+    unique_pax: set = field(default_factory=set)
+
+    def unique_pax_count(self) -> int:
+        """Return the count of unique PAX."""
+        return len(self.unique_pax)
 
 
 def get_user_mapping(session: 'Session') -> dict[str, str]:
@@ -117,14 +132,23 @@ def analyze_pax_attendance(
 def analyze_ao_attendance(
     parsed_beatdowns: list[ParsedBeatdown],
     ao_mapping: dict[str, str],
-) -> dict[str, int]:
-    """Analyze unique PAX attendance by AO from parsed beatdowns."""
-    ao_unique_pax = defaultdict(set)
+) -> dict[str, AOStats]:
+    """Analyze AO attendance statistics: total beatdowns, total posts, unique PAX."""
+    ao_stats = defaultdict(lambda: AOStats(ao_name=''))
     for parsed in parsed_beatdowns:
         ao_name = ao_mapping.get(parsed.ao_id, parsed.ao_id)
-        if parsed.pax:
-            ao_unique_pax[ao_name].update(parsed.pax)
-    return {ao_name: len(pax_set) for ao_name, pax_set in ao_unique_pax.items()}
+        if not ao_stats[ao_name].ao_name:
+            ao_stats[ao_name].ao_name = ao_name
+        ao_stats[ao_name].total_beatdowns += 1
+        # Gather all posters (PAX, Q, Co-Qs)
+        all_posters = set(parsed.pax or [])
+        if parsed.q_user_id:
+            all_posters.add(parsed.q_user_id)
+        if parsed.coq_user_id:
+            all_posters.update(parsed.coq_user_id)
+        ao_stats[ao_name].total_posts += len(all_posters)
+        ao_stats[ao_name].unique_pax.update(all_posters)
+    return ao_stats
 
 
 def analyze_q_counts(
@@ -203,7 +227,8 @@ def get_weekly_summary(
     # Parse all beatdowns once
     parsed_beatdowns = [transform_sql_to_parsed_beatdown(bd) for bd in beatdowns]
     pax_counts = analyze_pax_attendance(parsed_beatdowns)
-    ao_counts = analyze_ao_attendance(parsed_beatdowns, ao_mapping)
+    ao_stats = analyze_ao_attendance(parsed_beatdowns, ao_mapping)
+    ao_counts = {ao: stats.unique_pax_count() for ao, stats in ao_stats.items()}
     q_counts = analyze_q_counts(parsed_beatdowns, user_mapping)
     ao_fngs = analyze_fngs_by_ao(parsed_beatdowns, ao_mapping)
     ao_max_attendance = analyze_highest_attendance_per_ao(
@@ -211,9 +236,18 @@ def get_weekly_summary(
         ao_mapping,
         user_mapping,
     )
+    top_aos = sorted(
+        ao_stats.values(),
+        key=lambda x: (
+            -x.total_posts,
+            -x.unique_pax_count(),
+            -x.total_beatdowns,
+            x.ao_name.lower(),
+        ),
+    )
     return WeeklySummary(
         total_beatdowns=len(beatdowns),
-        total_attendance=sum(ao_counts.values()),
+        total_attendance=sum(stats.total_posts for stats in ao_stats.values()),
         unique_pax=len(pax_counts),
         pax_counts=pax_counts,
         ao_counts=ao_counts,
@@ -227,7 +261,7 @@ def get_weekly_summary(
                 key=lambda x: (-x[1], user_mapping.get(x[0], x[0]).lower()),
             )[:10]
         ],
-        top_aos=sorted(ao_counts.items(), key=lambda x: x[1], reverse=True),
+        top_aos=top_aos,
         top_qs=[
             (q, count)
             for q, count in sorted(
