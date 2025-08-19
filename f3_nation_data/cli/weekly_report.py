@@ -19,6 +19,7 @@ from f3_nation_data.analytics import (
 )
 from f3_nation_data.database import get_sql_engine
 from f3_nation_data.fetch import fetch_beatdowns_for_date_range
+from f3_nation_data.version import __version__
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(message)s')
@@ -32,32 +33,13 @@ REGION_MAP = {
 }
 
 
-class MissingF3NationDatabaseError(Exception):
-    """Custom exception for missing F3_NATION_DATABASE environment variable."""
-
-    def __init__(self) -> None:
-        """Initialize with a custom error message."""
-        msg = 'F3_NATION_DATABASE environment variable is not set. Please set it to your F3 region name.'
-        super().__init__(msg)
-
-
-def parse_date_argument(date_str: str) -> datetime:
-    """Parse date argument from command line.
-
-    Args:
-        date_str: Date string in YYYY-MM-DD format
-
-    Returns:
-        Parsed datetime object
-
-    Raises:
-        ValueError: If date format is invalid
-    """
+def valid_date(date_str: str) -> datetime:
+    """Argparse type for validating date argument."""
     try:
         return datetime.strptime(date_str, '%Y-%m-%d').replace(tzinfo=UTC)
-    except ValueError as e:
+    except ValueError:
         msg = f"Invalid date format '{date_str}'. Use YYYY-MM-DD format."
-        raise ValueError(msg) from e
+        raise argparse.ArgumentTypeError(msg)  # noqa: B904 - Custom argparse error message
 
 
 def format_weekly_summary_for_template(summary: WeeklySummary) -> dict:
@@ -81,79 +63,42 @@ def format_weekly_summary_for_template(summary: WeeklySummary) -> dict:
     }
 
 
-def generate_weekly_report(target_date: datetime | None = None) -> str:
-    """Generate weekly beatdown report for the specified week.
-
-    Args:
-        target_date: Date within the target week (defaults to current week)
-
-    Returns:
-        Formatted report string
-
-    Raises:
-        Exception: If database connection or data fetching fails
-    """
-    # Use current week if no target date provided
+def get_weekly_summary_data(
+    target_date: datetime | None = None,
+) -> tuple[WeeklySummary | None, datetime, datetime]:
+    """Fetch and analyze weekly beatdown data."""
     if target_date is None:
         target_date = datetime.now(tz=UTC)
-
-    # Get week range
     week_start, week_end = get_week_range(target_date)
-
     logger.info(
         'Generating report for week: %s to %s',
         week_start.strftime('%Y-%m-%d'),
         week_end.strftime('%Y-%m-%d'),
     )
-
-    # Connect to database
     engine = get_sql_engine()
-
     with Session(engine) as session:
-        # Get mappings
-        logger.info('Loading user and AO mappings...')
         user_mapping = get_user_mapping(session)
         ao_mapping = get_ao_mapping(session)
-
-        # Fetch beatdowns for the week
-        logger.info('Fetching beatdowns...')
         beatdowns = fetch_beatdowns_for_date_range(
             session,
             week_start,
             week_end,
         )
-
         if not beatdowns:
-            return f'No beatdowns found for week {week_start.strftime("%Y-%m-%d")} to {week_end.strftime("%Y-%m-%d")}'
-
-        logger.info('Found %d beatdowns for the week', len(beatdowns))
-
-        # Generate analytics
-        logger.info('Analyzing data...')
+            return None, week_start, week_end
         summary = get_weekly_summary(beatdowns, user_mapping, ao_mapping)
+    return summary, week_start, week_end
 
-    # Determine region title and emoji from DB name
 
+def get_weekly_template_data(
+    summary: WeeklySummary,
+    week_start: datetime,
+    week_end: datetime,
+) -> dict:
+    """Prepare template context for weekly report."""
     db_name = os.environ.get('F3_NATION_DATABASE', '').lower()
-    region_title, region_emoji = REGION_MAP.get(
-        db_name,
-        (db_name, ''),
-    )
-    if not db_name:
-        raise MissingF3NationDatabaseError
-
-    # Load template
-    template_dir = Path(__file__).parent / 'templates'
-    env = Environment(
-        loader=FileSystemLoader(template_dir),
-        autoescape=False,  # noqa: S701 - Safe for text reports, not web content
-    )
-    # Add custom filter to prefix @ using a lambda
-    env.filters['at_prefix'] = lambda names: [f'@{name}' for name in names]
-    template = env.get_template('weekly_report.txt')
-
-    # Format data for template
-    template_data = {
+    region_title, region_emoji = REGION_MAP.get(db_name, (db_name, ''))
+    return {
         'week_start': week_start,
         'week_end': week_end,
         'summary': format_weekly_summary_for_template(summary),
@@ -161,8 +106,31 @@ def generate_weekly_report(target_date: datetime | None = None) -> str:
         'region_emoji': region_emoji,
     }
 
-    # Render report
+
+def render_weekly_report(template_data: dict) -> str:
+    """Render the weekly report from template data."""
+    template_dir = Path(__file__).parent / 'templates'
+    env = Environment(
+        loader=FileSystemLoader(template_dir),
+        autoescape=False,  # noqa: S701 - Safe for text reports, not web content
+    )
+    env.filters['at_prefix'] = lambda names: [f'@{name}' for name in names]
+    template = env.get_template('weekly_report.txt')
     return template.render(**template_data)
+
+
+def generate_weekly_report(
+    target_date: datetime | None = None,
+) -> tuple[str | None, str | None, str | None]:
+    """Generate weekly beatdown report for the specified week."""
+    summary, week_start, week_end = get_weekly_summary_data(target_date)
+    week_start_str = week_start.strftime('%Y-%m-%d')
+    week_end_str = week_end.strftime('%Y-%m-%d')
+    if summary is None:
+        # Return None and week range as strings for error handling in main
+        return None, week_start_str, week_end_str
+    template_data = get_weekly_template_data(summary, week_start, week_end)
+    return render_weekly_report(template_data), None, None
 
 
 def main() -> None:
@@ -181,33 +149,36 @@ Examples:
     parser.add_argument(
         'date',
         nargs='?',
+        type=valid_date,
         help='Date within the target week (YYYY-MM-DD format). Defaults to current week.',
     )
 
     parser.add_argument(
         '--date',
         dest='date_flag',
+        type=valid_date,
         help='Date within the target week (YYYY-MM-DD format). Alternative to positional argument.',
+    )
+
+    parser.add_argument(
+        '--version',
+        action='version',
+        version=__version__,
+        help='Show CLI version and exit.',
     )
 
     args = parser.parse_args()
 
     # Determine target date
-    target_date = None
-    date_str = args.date or args.date_flag
-
-    if date_str:
-        try:
-            target_date = parse_date_argument(date_str)
-        except ValueError:
-            logger.exception('Error parsing date')
-            sys.exit(1)
+    target_date = args.date or args.date_flag
 
     try:
-        report = generate_weekly_report(target_date)
-        # Use sys.stdout.write instead of print to avoid linter issues
+        report, no_bd_start, no_bd_end = generate_weekly_report(target_date)
+        if report is None:
+            msg = f'No beatdowns found for week {no_bd_start} to {no_bd_end}'
+            logger.error(msg)
+            sys.exit(1)
         sys.stdout.write(report + '\n')
-
     except (OSError, ValueError):
         logger.exception('Error generating report')
         sys.exit(1)

@@ -224,8 +224,7 @@ def get_weekly_summary(
             (user_mapping.get(user_id, user_id), count)
             for user_id, count in sorted(
                 pax_counts.items(),
-                key=lambda x: x[1],
-                reverse=True,
+                key=lambda x: (-x[1], user_mapping.get(x[0], x[0]).lower()),
             )[:10]
         ],
         top_aos=sorted(ao_counts.items(), key=lambda x: x[1], reverse=True),
