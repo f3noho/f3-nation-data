@@ -14,7 +14,7 @@ EXPECTED_REPORT = dedent("""
     :noho: F3 NoHo Weekly Beatdown Report
     Week of March 04 - March 10, 2024
 
-    📊 Week Summary: 1 beatdowns, 6 total attendance, 7 unique PAX
+    📊 Week Summary: 1 beatdowns, 7 total attendance, 7 unique PAX
 
 
 

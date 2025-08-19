@@ -128,6 +128,26 @@ def analyze_pax_attendance(
             pax_counts[pax_id] += 1
     return dict(pax_counts)
 
+def _debug_backblast(parsed: ParsedBeatdown, all_posters: set[str]) -> None:  # pragma: no cover
+    """Print debug information about a parsed beatdown and its attendance aggregation.
+
+    This function is used for manual verification and will not be covered by tests.
+    Args:
+        parsed: ParsedBeatdown object containing beatdown details
+        all_posters: Set of all unique attendees (registered, unregistered, FNGs, Qs, Co-Qs)
+
+    Note:
+        Marked with `# pragma: no cover` to exclude from coverage reports.
+    """  # pragma: no cover
+    info = (
+        f'Date: {parsed.bd_date} | Title: {parsed.title} | Total Posters: {len(all_posters)}\n'
+        f'  Q: {parsed.q_user_id}\n'
+        f'  Co-Qs: {parsed.coq_user_id or []}\n'
+        f'  PAX: {parsed.pax or []}\n'
+        f'  FNGs: {parsed.fngs}\n'
+        f'  Non-registered PAX: {parsed.non_registered_pax}\n'
+    )
+    print(info)  # noqa: T201
 
 def analyze_ao_attendance(
     parsed_beatdowns: list[ParsedBeatdown],
@@ -140,14 +160,21 @@ def analyze_ao_attendance(
         if not ao_stats[ao_name].ao_name:
             ao_stats[ao_name].ao_name = ao_name
         ao_stats[ao_name].total_beatdowns += 1
-        # Gather all posters (PAX, Q, Co-Qs)
+        # Gather all posters (registered PAX, non-registered PAX, Q, Co-Qs, FNGs)
         all_posters = set(parsed.pax or [])
+        if parsed.non_registered_pax:
+            all_posters.update(parsed.non_registered_pax)
+        if parsed.fngs:
+            all_posters.update(parsed.fngs)
         if parsed.q_user_id:
             all_posters.add(parsed.q_user_id)
         if parsed.coq_user_id:
             all_posters.update(parsed.coq_user_id)
         ao_stats[ao_name].total_posts += len(all_posters)
         ao_stats[ao_name].unique_pax.update(all_posters)
+        # Debugging: print backblast info for 'the_river' using _debug_backblast
+        # if ao_name.lower() == 'the_river':
+        #     _debug_backblast(parsed, all_posters)  # noqa: ERA001 - Debugging function
     return ao_stats
 
 
