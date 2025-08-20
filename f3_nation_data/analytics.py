@@ -79,9 +79,7 @@ class AOStats:
 
     def avg_pax_per_beatdown(self) -> float:
         """Return the average number of PAX per beatdown for this AO."""
-        if self.total_beatdowns == 0:
-            return 0.0
-        return self.total_posts / self.total_beatdowns
+        return 0 if self.total_beatdowns == 0 else self.total_posts / self.total_beatdowns
 
 
 def get_user_mapping(session: 'Session') -> dict[str, str]:
@@ -134,10 +132,15 @@ def analyze_pax_attendance(
             pax_counts[pax_id] += 1
     return dict(pax_counts)
 
-def _debug_backblast(parsed: ParsedBeatdown, all_posters: set[str]) -> None:  # pragma: no cover
+
+def _debug_backblast(
+    parsed: ParsedBeatdown,
+    all_posters: set[str],
+) -> None:  # pragma: no cover
     """Print debug information about a parsed beatdown and its attendance aggregation.
 
     This function is used for manual verification and will not be covered by tests.
+
     Args:
         parsed: ParsedBeatdown object containing beatdown details
         all_posters: Set of all unique attendees (registered, unregistered, FNGs, Qs, Co-Qs)
@@ -154,6 +157,7 @@ def _debug_backblast(parsed: ParsedBeatdown, all_posters: set[str]) -> None:  # 
         f'  Non-registered PAX: {parsed.non_registered_pax}\n'
     )
     print(info)  # noqa: T201
+
 
 def analyze_ao_attendance(
     parsed_beatdowns: list[ParsedBeatdown],
@@ -278,6 +282,19 @@ def get_weekly_summary(
             x.ao_name.lower(),
         ),
     )
+    # top_pax: get all PAX with the top 3 attendance counts
+    sorted_counts = sorted(set(pax_counts.values()), reverse=True)
+    top_counts = sorted_counts[:3]
+    top_pax = []
+    for count in top_counts:
+        # Find all PAX with this count
+        pax_with_count = [
+            (user_mapping.get(user_id, user_id), count) for user_id, c in pax_counts.items() if c == count
+        ]
+        # Sort alphabetically for consistency
+        pax_with_count.sort(key=lambda x: x[0].lower())
+        top_pax.extend(pax_with_count)
+
     return WeeklySummary(
         total_beatdowns=len(beatdowns),
         total_attendance=sum(stats.total_posts for stats in ao_stats.values()),
@@ -287,13 +304,7 @@ def get_weekly_summary(
         q_counts=q_counts,
         ao_fngs=ao_fngs,
         ao_max_attendance=ao_max_attendance,
-        top_pax=[
-            (user_mapping.get(user_id, user_id), count)
-            for user_id, count in sorted(
-                pax_counts.items(),
-                key=lambda x: (-x[1], user_mapping.get(x[0], x[0]).lower()),
-            )[:10]
-        ],
+        top_pax=top_pax,
         top_aos=top_aos,
         top_qs=[
             (q, count)
