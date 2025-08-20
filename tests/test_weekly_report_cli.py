@@ -33,6 +33,14 @@ EXPECTED_REPORT = dedent("""
     • No one has Q'd 2 or more times this week
 
     🏆 AO Stats:
+    - 7 posts — #The Depot (avg 7 per BD)
+        - 1 BDs, 7 Unique Pax
+    REGION TOTAL: 7 posts, 1 beatdowns, 7 unique PAX
+
+
+
+
+    🏆 AO Stats:
     ```
     | AO Name              | BDs/DDs | Unique PAX | Posts | Avg PAX/BD |
     |----------------------|---------|------------|-------|------------|

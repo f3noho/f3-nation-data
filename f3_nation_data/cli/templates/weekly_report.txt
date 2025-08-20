@@ -41,6 +41,17 @@ Week of {{ week_start.strftime('%B %d') }} - {{ week_end.strftime('%B %d, %Y') }
 
 {% if summary.top_aos %}
 🏆 AO Stats:
+{% for ao in summary.top_aos | sort(attribute='total_posts', reverse=true) -%}
+- {{ ao.total_posts }} posts — #{{ ao.ao_name }} (avg {{ ao.avg_pax_per_beatdown()|int }} per BD)
+    - {{ ao.total_beatdowns }} BDs, {{ ao.unique_pax_count() }} Unique Pax
+{% endfor -%}
+
+REGION TOTAL: {{ summary.total_attendance }} posts, {{ summary.total_beatdowns }} beatdowns, {{ summary.unique_pax }} unique PAX
+
+{% endif %}
+
+{% if summary.top_aos %}
+🏆 AO Stats:
 ```
 | AO Name              | BDs/DDs | Unique PAX | Posts | Avg PAX/BD |
 |----------------------|---------|------------|-------|------------|
