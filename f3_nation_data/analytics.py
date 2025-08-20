@@ -77,6 +77,12 @@ class AOStats:
         """Return the count of unique PAX."""
         return len(self.unique_pax)
 
+    def avg_pax_per_beatdown(self) -> float:
+        """Return the average number of PAX per beatdown for this AO."""
+        if self.total_beatdowns == 0:
+            return 0.0
+        return self.total_posts / self.total_beatdowns
+
 
 def get_user_mapping(session: 'Session') -> dict[str, str]:
     """Get mapping of user IDs to display names.
