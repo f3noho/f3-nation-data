@@ -159,6 +159,21 @@ def _debug_backblast(
     print(info)  # noqa: T201
 
 
+def _get_all_posters(parsed: ParsedBeatdown) -> set[str]:
+    """Aggregate all unique attendees for a beatdown."""
+    sets_to_add = (
+        set(parsed.pax or []),
+        set(parsed.non_registered_pax or []),
+        set(parsed.fngs or []),
+        {parsed.q_user_id} if parsed.q_user_id else set(),
+        set(parsed.coq_user_id or []),
+    )
+    all_posters = set()
+    for s in sets_to_add:
+        all_posters.update(s)
+    return all_posters
+
+
 def analyze_ao_attendance(
     parsed_beatdowns: list[ParsedBeatdown],
     ao_mapping: dict[str, str],
@@ -166,20 +181,11 @@ def analyze_ao_attendance(
     """Analyze AO attendance statistics: total beatdowns, total posts, unique PAX."""
     ao_stats = defaultdict(lambda: AOStats(ao_name=''))
     for parsed in parsed_beatdowns:
+        all_posters = _get_all_posters(parsed)
         ao_name = ao_mapping.get(parsed.ao_id, parsed.ao_id)
         if not ao_stats[ao_name].ao_name:
             ao_stats[ao_name].ao_name = ao_name
         ao_stats[ao_name].total_beatdowns += 1
-        # Gather all posters (registered PAX, non-registered PAX, Q, Co-Qs, FNGs)
-        all_posters = set(parsed.pax or [])
-        if parsed.non_registered_pax:
-            all_posters.update(parsed.non_registered_pax)
-        if parsed.fngs:
-            all_posters.update(parsed.fngs)
-        if parsed.q_user_id:
-            all_posters.add(parsed.q_user_id)
-        if parsed.coq_user_id:
-            all_posters.update(parsed.coq_user_id)
         ao_stats[ao_name].total_posts += len(all_posters)
         ao_stats[ao_name].unique_pax.update(all_posters)
         # Debugging: print backblast info for 'the_river' using _debug_backblast

@@ -32,8 +32,14 @@ EXPECTED_REPORT = dedent("""
     👑 Leaders in Q Counts:
     • No one has Q'd 2 or more times this week
 
-    🏆 AO Rankings by Unique PAX:
-     6 #the depot
+    🏆 AO Stats:
+    ```
+    | AO Name              | BDs/DDs | Unique PAX | Posts | Avg PAX/BD |
+    |----------------------|---------|------------|-------|------------|
+    | The Depot            |       1 |          7 |     7 |          7 |
+    |----------------------|---------|------------|-------|------------|
+    | REGION TOTAL         |       1 |          7 |     7 |      -     |
+    ```
 """)
 
 
