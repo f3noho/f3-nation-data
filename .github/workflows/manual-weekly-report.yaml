@@ -1,4 +1,4 @@
-name: Manual Weekly Report
+name: weekly-report
 
 on:
   workflow_dispatch:
@@ -31,5 +31,5 @@ jobs:
       - name: generate-report
         run: |
           uv run f3-weekly-report ${{ github.event.inputs.date }} > report.txt
-          echo "### F3 Weekly Report" >> $GITHUB_STEP_SUMMARY
+          echo "### Weekly Report" >> $GITHUB_STEP_SUMMARY
           cat report.txt >> $GITHUB_STEP_SUMMARY
