@@ -11,6 +11,7 @@ from sqlalchemy import Engine
 from f3_nation_data.cli import weekly_report
 
 EXPECTED_REPORT = dedent("""
+    ```
     :noho: F3 NoHo Weekly Beatdown Report
     Week of March 04 - March 10, 2024
 
@@ -41,12 +42,13 @@ EXPECTED_REPORT = dedent("""
 
 
     🏆 AO Stats:
-    ```
+
     | AO Name              | BDs/DDs | Unique PAX | Posts | Avg PAX/BD |
     |----------------------|---------|------------|-------|------------|
     | The Depot            |       1 |          7 |     7 |          7 |
     |----------------------|---------|------------|-------|------------|
     | REGION TOTAL         |       1 |          7 |     7 |      -     |
+
     ```
 """)
 

@@ -1,3 +1,4 @@
+```
 {{ region_emoji }} {{ region_title }} Weekly Beatdown Report
 Week of {{ week_start.strftime('%B %d') }} - {{ week_end.strftime('%B %d, %Y') }}
 
@@ -52,7 +53,7 @@ REGION TOTAL: {{ summary.total_attendance }} posts, {{ summary.total_beatdowns }
 
 {% if summary.top_aos %}
 🏆 AO Stats:
-```
+
 | AO Name              | BDs/DDs | Unique PAX | Posts | Avg PAX/BD |
 |----------------------|---------|------------|-------|------------|
 {% for ao in summary.top_aos | sort(attribute='total_posts', reverse=true) -%}
@@ -60,5 +61,5 @@ REGION TOTAL: {{ summary.total_attendance }} posts, {{ summary.total_beatdowns }
 {% endfor -%}
 |----------------------|---------|------------|-------|------------|
 | REGION TOTAL         | {{ '%7d'|format(summary.total_beatdowns) }} | {{ '%10d'|format(summary.unique_pax) }} | {{ '%5d'|format(summary.total_attendance) }} |      -     |
-```
 {% endif %}
+```

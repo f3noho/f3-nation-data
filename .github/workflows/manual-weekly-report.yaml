@@ -27,7 +27,7 @@ jobs:
       - name: setup-uv
         uses: astral-sh/setup-uv@v6
       - name: dependencies
-        run: uv pip install -e .
+        run: uv sync --all-groups
       - name: generate-report
         run: |
           uv run f3-weekly-report ${{ github.event.inputs.date }} > report.txt
