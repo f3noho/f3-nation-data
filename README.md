@@ -89,7 +89,7 @@ reports directly from your database.
 To run the CLI and generate a weekly report:
 
 ```bash
-uvx --from f3-nation-data weekly_report [DATE]
+uvx --from f3-nation-data f3-weekly-report [DATE]
 ```
 
 - `DATE` (optional): Any date within the target week (format: `YYYY-MM-DD`). If
@@ -98,7 +98,7 @@ uvx --from f3-nation-data weekly_report [DATE]
 #### Example
 
 ```bash
-uvx --from f3-nation-data weekly_report 2024-03-09
+uvx --from f3-nation-data f3-weekly-report 2024-03-09
 ```
 
 #### Options
