@@ -1,0 +1,35 @@
+name: Manual Weekly Report
+
+on:
+  workflow_dispatch:
+    inputs:
+      f3-database:
+        description: 'F3 database name (e.g., f3noho)'
+        required: true
+        type: string
+      date:
+        description: 'Date for weekly report (YYYY-MM-DD)'
+        required: true
+        type: string
+
+jobs:
+  run-weekly-report:
+    runs-on: ubuntu-latest
+    env:
+      F3_NATION_DATABASE: ${{ github.event.inputs.f3-database }}
+      F3_NATION_USER: ${{ secrets.F3_NATION_USER }}
+      F3_NATION_PASSWORD: ${{ secrets.F3_NATION_PASSWORD }}
+      F3_NATION_HOST: ${{ secrets.F3_NATION_HOST }}
+      F3_NATION_PORT: 3306
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+      - name: setup-uv
+        uses: astral-sh/setup-uv@v6
+      - name: dependencies
+        run: uv pip install -e .
+      - name: generate-report
+        run: |
+          uv run f3-weekly-report ${{ github.event.inputs.date }} > report.txt
+          echo "### F3 Weekly Report" >> $GITHUB_STEP_SUMMARY
+          cat report.txt >> $GITHUB_STEP_SUMMARY

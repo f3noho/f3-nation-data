@@ -17,6 +17,8 @@ jobs:
         uses: actions/checkout@v4
       - name: mise
         uses: jdx/mise-action@v2
+      - name: Install all dependencies (main + dev)
+        run: uv sync --all-groups
       - name: poe
         run: uv tool install poethepoet
       - name: dependencies
