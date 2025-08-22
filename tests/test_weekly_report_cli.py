@@ -14,7 +14,7 @@ EXPECTED_REPORT = dedent("""
     :noho: F3 NoHo Weekly Beatdown Report
     Week of March 04 - March 10, 2024
 
-    📊 Week Summary: 1 beatdowns, 6 total attendance, 7 unique PAX
+    📊 Week Summary: 1 beatdowns, 7 total attendance, 7 unique PAX
 
 
 
@@ -32,8 +32,22 @@ EXPECTED_REPORT = dedent("""
     👑 Leaders in Q Counts:
     • No one has Q'd 2 or more times this week
 
-    🏆 AO Rankings by Unique PAX:
-     6 #the depot
+    🏆 AO Stats:
+    - 7 posts — #The Depot (avg 7 per BD)
+        - 1 BDs, 7 Unique Pax
+    REGION TOTAL: 7 posts, 1 beatdowns, 7 unique PAX
+
+
+
+
+    🏆 AO Stats:
+    ```
+    | AO Name              | BDs/DDs | Unique PAX | Posts | Avg PAX/BD |
+    |----------------------|---------|------------|-------|------------|
+    | The Depot            |       1 |          7 |     7 |          7 |
+    |----------------------|---------|------------|-------|------------|
+    | REGION TOTAL         |       1 |          7 |     7 |      -     |
+    ```
 """)
 
 

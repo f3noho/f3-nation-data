@@ -1,4 +1,3 @@
-
 {{ region_emoji }} {{ region_title }} Weekly Beatdown Report
 Week of {{ week_start.strftime('%B %d') }} - {{ week_end.strftime('%B %d, %Y') }}
 
@@ -41,8 +40,25 @@ Week of {{ week_start.strftime('%B %d') }} - {{ week_end.strftime('%B %d, %Y') }
 {% endif -%}
 
 {% if summary.top_aos %}
-🏆 AO Rankings by Unique PAX:
-{% for ao_name, count in summary.top_aos -%}
-{{ "%2d"|format(count) }} #{{ ao_name.lower() }}
+🏆 AO Stats:
+{% for ao in summary.top_aos | sort(attribute='total_posts', reverse=true) -%}
+- {{ ao.total_posts }} posts — #{{ ao.ao_name }} (avg {{ ao.avg_pax_per_beatdown()|int }} per BD)
+    - {{ ao.total_beatdowns }} BDs, {{ ao.unique_pax_count() }} Unique Pax
 {% endfor -%}
+
+REGION TOTAL: {{ summary.total_attendance }} posts, {{ summary.total_beatdowns }} beatdowns, {{ summary.unique_pax }} unique PAX
+
+{% endif %}
+
+{% if summary.top_aos %}
+🏆 AO Stats:
+```
+| AO Name              | BDs/DDs | Unique PAX | Posts | Avg PAX/BD |
+|----------------------|---------|------------|-------|------------|
+{% for ao in summary.top_aos | sort(attribute='total_posts', reverse=true) -%}
+| {{ ao.ao_name.ljust(20) }} | {{ '%7d'|format(ao.total_beatdowns) }} | {{ '%10d'|format(ao.unique_pax_count()) }} | {{ '%5d'|format(ao.total_posts) }} | {{ '%10d'|format(ao.avg_pax_per_beatdown()|int) }} |
+{% endfor -%}
+|----------------------|---------|------------|-------|------------|
+| REGION TOTAL         | {{ '%7d'|format(summary.total_beatdowns) }} | {{ '%10d'|format(summary.unique_pax) }} | {{ '%5d'|format(summary.total_attendance) }} |      -     |
+```
 {% endif %}

@@ -9,6 +9,7 @@ This module provides analytics functions for beatdown data, including:
 """
 
 from collections import Counter, defaultdict
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -44,7 +45,7 @@ class WeeklySummary(BaseModel):
     ao_fngs: dict[str, list[str]]
     ao_max_attendance: dict[str, HighestAttendanceResult]
     top_pax: list[tuple[str, int]]
-    top_aos: list[tuple[str, int]]
+    top_aos: list['AOStats']
     top_qs: list[tuple[str, int]]
 
 
@@ -61,6 +62,24 @@ class BeatdownDetails(BaseModel):
     fng_names: list[str]
     workout_type: str
     word_count: int
+
+
+@dataclass
+class AOStats:
+    """Data model for AO statistics, used for aggregation and reporting."""
+
+    ao_name: str
+    total_beatdowns: int = 0
+    total_posts: int = 0
+    unique_pax: set = field(default_factory=set)
+
+    def unique_pax_count(self) -> int:
+        """Return the count of unique PAX."""
+        return len(self.unique_pax)
+
+    def avg_pax_per_beatdown(self) -> float:
+        """Return the average number of PAX per beatdown for this AO."""
+        return 0 if self.total_beatdowns == 0 else self.total_posts / self.total_beatdowns
 
 
 def get_user_mapping(session: 'Session') -> dict[str, str]:
@@ -114,17 +133,65 @@ def analyze_pax_attendance(
     return dict(pax_counts)
 
 
+def _debug_backblast(
+    parsed: ParsedBeatdown,
+    all_posters: set[str],
+) -> None:  # pragma: no cover
+    """Print debug information about a parsed beatdown and its attendance aggregation.
+
+    This function is used for manual verification and will not be covered by tests.
+
+    Args:
+        parsed: ParsedBeatdown object containing beatdown details
+        all_posters: Set of all unique attendees (registered, unregistered, FNGs, Qs, Co-Qs)
+
+    Note:
+        Marked with `# pragma: no cover` to exclude from coverage reports.
+    """  # pragma: no cover
+    info = (
+        f'Date: {parsed.bd_date} | Title: {parsed.title} | Total Posters: {len(all_posters)}\n'
+        f'  Q: {parsed.q_user_id}\n'
+        f'  Co-Qs: {parsed.coq_user_id or []}\n'
+        f'  PAX: {parsed.pax or []}\n'
+        f'  FNGs: {parsed.fngs}\n'
+        f'  Non-registered PAX: {parsed.non_registered_pax}\n'
+    )
+    print(info)  # noqa: T201
+
+
+def _get_all_posters(parsed: ParsedBeatdown) -> set[str]:
+    """Aggregate all unique attendees for a beatdown."""
+    sets_to_add = (
+        set(parsed.pax or []),
+        set(parsed.non_registered_pax or []),
+        set(parsed.fngs or []),
+        {parsed.q_user_id} if parsed.q_user_id else set(),
+        set(parsed.coq_user_id or []),
+    )
+    all_posters = set()
+    for s in sets_to_add:
+        all_posters.update(s)
+    return all_posters
+
+
 def analyze_ao_attendance(
     parsed_beatdowns: list[ParsedBeatdown],
     ao_mapping: dict[str, str],
-) -> dict[str, int]:
-    """Analyze unique PAX attendance by AO from parsed beatdowns."""
-    ao_unique_pax = defaultdict(set)
+) -> dict[str, AOStats]:
+    """Analyze AO attendance statistics: total beatdowns, total posts, unique PAX."""
+    ao_stats = defaultdict(lambda: AOStats(ao_name=''))
     for parsed in parsed_beatdowns:
+        all_posters = _get_all_posters(parsed)
         ao_name = ao_mapping.get(parsed.ao_id, parsed.ao_id)
-        if parsed.pax:
-            ao_unique_pax[ao_name].update(parsed.pax)
-    return {ao_name: len(pax_set) for ao_name, pax_set in ao_unique_pax.items()}
+        if not ao_stats[ao_name].ao_name:
+            ao_stats[ao_name].ao_name = ao_name
+        ao_stats[ao_name].total_beatdowns += 1
+        ao_stats[ao_name].total_posts += len(all_posters)
+        ao_stats[ao_name].unique_pax.update(all_posters)
+        # Debugging: print backblast info for 'the_river' using _debug_backblast
+        # if ao_name.lower() == 'the_river':
+        #     _debug_backblast(parsed, all_posters)  # noqa: ERA001 - Debugging function
+    return ao_stats
 
 
 def analyze_q_counts(
@@ -203,7 +270,8 @@ def get_weekly_summary(
     # Parse all beatdowns once
     parsed_beatdowns = [transform_sql_to_parsed_beatdown(bd) for bd in beatdowns]
     pax_counts = analyze_pax_attendance(parsed_beatdowns)
-    ao_counts = analyze_ao_attendance(parsed_beatdowns, ao_mapping)
+    ao_stats = analyze_ao_attendance(parsed_beatdowns, ao_mapping)
+    ao_counts = {ao: stats.unique_pax_count() for ao, stats in ao_stats.items()}
     q_counts = analyze_q_counts(parsed_beatdowns, user_mapping)
     ao_fngs = analyze_fngs_by_ao(parsed_beatdowns, ao_mapping)
     ao_max_attendance = analyze_highest_attendance_per_ao(
@@ -211,23 +279,39 @@ def get_weekly_summary(
         ao_mapping,
         user_mapping,
     )
+    top_aos = sorted(
+        ao_stats.values(),
+        key=lambda x: (
+            -x.total_posts,
+            -x.unique_pax_count(),
+            -x.total_beatdowns,
+            x.ao_name.lower(),
+        ),
+    )
+    # top_pax: get all PAX with the top 3 attendance counts
+    sorted_counts = sorted(set(pax_counts.values()), reverse=True)
+    top_counts = sorted_counts[:3]
+    top_pax = []
+    for count in top_counts:
+        # Find all PAX with this count
+        pax_with_count = [
+            (user_mapping.get(user_id, user_id), count) for user_id, c in pax_counts.items() if c == count
+        ]
+        # Sort alphabetically for consistency
+        pax_with_count.sort(key=lambda x: x[0].lower())
+        top_pax.extend(pax_with_count)
+
     return WeeklySummary(
         total_beatdowns=len(beatdowns),
-        total_attendance=sum(ao_counts.values()),
+        total_attendance=sum(stats.total_posts for stats in ao_stats.values()),
         unique_pax=len(pax_counts),
         pax_counts=pax_counts,
         ao_counts=ao_counts,
         q_counts=q_counts,
         ao_fngs=ao_fngs,
         ao_max_attendance=ao_max_attendance,
-        top_pax=[
-            (user_mapping.get(user_id, user_id), count)
-            for user_id, count in sorted(
-                pax_counts.items(),
-                key=lambda x: (-x[1], user_mapping.get(x[0], x[0]).lower()),
-            )[:10]
-        ],
-        top_aos=sorted(ao_counts.items(), key=lambda x: x[1], reverse=True),
+        top_pax=top_pax,
+        top_aos=top_aos,
         top_qs=[
             (q, count)
             for q, count in sorted(
