@@ -8,6 +8,7 @@ TB_COVERAGE_EXTRA_ARGS = "--cov=dev_utilities --cov-fail-under=100"
 COVERAGE_RCFILE="configs/.coveragerc"
 
 [tools]
+python = "3.11"
 uv = "0.7.20"
 taplo = "0.10.0"
 node = "24.4.1"
