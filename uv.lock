@@ -132,7 +132,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "f3-nation-test-utils", git = "https://github.com/f3noho/f3-nation-test-utils?rev=topic%2Fdata-migration" },
+    { name = "f3-nation-test-utils", git = "https://github.com/f3noho/f3-nation-test-utils?rev=master" },
     { name = "poethepoet", specifier = ">=0.37.0" },
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "pytest-cov", specifier = ">=4.0.0" },
@@ -143,7 +143,7 @@ dev = [
 [[package]]
 name = "f3-nation-test-utils"
 version = "0.0.0.dev0"
-source = { git = "https://github.com/f3noho/f3-nation-test-utils?rev=topic%2Fdata-migration#155072c5d829e8ccdb7422ab609b6784587358bd" }
+source = { git = "https://github.com/f3noho/f3-nation-test-utils?rev=master#515655a788a602cfd65a48c8c73049dc0525e549" }
 dependencies = [
     { name = "pymysql" },
     { name = "sqlalchemy" },
