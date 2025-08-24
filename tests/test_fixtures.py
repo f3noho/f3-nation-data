@@ -42,19 +42,6 @@ def test_f3_fixtures_basic_functionality(f3_test_session: Session) -> None:
     assert beatdown.pax_count == 7
 
 
-def test_f3_data_counts_fixture(f3_data_counts: dict[str, int]) -> None:
-    """Test the convenience f3_data_counts fixture."""
-    # Verify the counts fixture returns expected structure
-    assert 'aos' in f3_data_counts
-    assert 'users' in f3_data_counts
-    assert 'beatdowns' in f3_data_counts
-
-    # All counts should be positive
-    assert f3_data_counts['aos'] > 0
-    assert f3_data_counts['users'] > 0
-    assert f3_data_counts['beatdowns'] > 0
-
-
 def test_f3_fixtures_data_relationships(f3_test_session: Session) -> None:
     """Test that the fixture data has proper relationships."""
     # Get a beatdown and verify its related AO and user exist

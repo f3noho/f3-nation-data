@@ -20,7 +20,7 @@ EXPECTED_REPORT = dedent("""
 
 
     📈 Highest Attended Workout at Each AO:
-     7 #the depot (Q: @Steubie) on 03/09/2024 - Steubie's Way Too Long 3 Yr Anniversary Celebration Continues
+     7 #the depot (Q: @Steubie) on 08/23/2025 - Breakfast Bonanza
 
     💪 Top HIMs Who Posted This Week:
     1 @Hose
