@@ -23,9 +23,8 @@ from f3_nation_data.analytics import (
     get_weekly_summary,
 )
 from f3_nation_data.fetch import _timestamp_to_datetime, fetch_sql_beatdowns
-from f3_nation_data.models.parsed.beatdown import ParsedBeatdown
-from f3_nation_data.models.sql.beatdown import SqlBeatDownModel
-from f3_nation_data.parsing.backblast import transform_sql_to_parsed_beatdown
+from f3_nation_data.models import ParsedBeatdown, SqlBeatDownModel
+from f3_nation_data.transform import transform_sql_to_beatdown_record
 
 
 def test_get_user_mapping(f3_test_database: Engine):
@@ -64,7 +63,7 @@ def test_analyze_pax_attendance(f3_test_database: Engine):
     with Session(f3_test_database) as session:
         beatdowns = fetch_sql_beatdowns(session)
         pax_counts = analyze_pax_attendance(
-            [transform_sql_to_parsed_beatdown(bd) for bd in beatdowns],
+            [transform_sql_to_beatdown_record(bd).backblast for bd in beatdowns],
         )
 
         # Should return dict with user IDs and counts
@@ -83,7 +82,7 @@ def test_analyze_ao_attendance(f3_test_database: Engine):
         beatdowns = fetch_sql_beatdowns(session)
         ao_mapping = get_ao_mapping(session)
         ao_stats = analyze_ao_attendance(
-            [transform_sql_to_parsed_beatdown(bd) for bd in beatdowns],
+            [transform_sql_to_beatdown_record(bd).backblast for bd in beatdowns],
             ao_mapping,
         )
 
@@ -125,7 +124,7 @@ def test_analyze_fngs_by_ao(f3_test_database: Engine):
         beatdowns = fetch_sql_beatdowns(session)
         ao_mapping = get_ao_mapping(session)
         ao_fngs = analyze_fngs_by_ao(
-            [transform_sql_to_parsed_beatdown(bd) for bd in beatdowns],
+            [transform_sql_to_beatdown_record(bd).backblast for bd in beatdowns],
             ao_mapping,
         )
 
@@ -145,7 +144,7 @@ def test_analyze_highest_attendance_per_ao(f3_test_database: Engine):
         user_mapping = get_user_mapping(session)
 
         ao_max = analyze_highest_attendance_per_ao(
-            [transform_sql_to_parsed_beatdown(bd) for bd in beatdowns],
+            [transform_sql_to_beatdown_record(bd).backblast for bd in beatdowns],
             ao_mapping,
             user_mapping,
         )
@@ -320,7 +319,7 @@ def test_date_parsing_error_handling():
 
     # This should not crash, even with invalid date
     result = analyze_highest_attendance_per_ao(
-        [transform_sql_to_parsed_beatdown(mock_beatdown)],
+        [transform_sql_to_beatdown_record(mock_beatdown).backblast],
         ao_mapping,
         user_mapping,
     )
@@ -386,7 +385,6 @@ def test_q_and_pax_overlap():
     coq_id = 'U67890'
     # Sample beatdown: Q is also in PAX, plus a Co-Q
     parsed = ParsedBeatdown(
-        timestamp='2025-08-18T12:00:00Z',
         raw_backblast='Test backblast content',
         ao_id='C1',
         pax=[slack_id, coq_id],

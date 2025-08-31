@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from f3_nation_data.models.parsed.beatdown import ParsedBeatdown
-from f3_nation_data.models.sql.beatdown import SqlBeatDownModel
 
 
 @dataclass
@@ -390,12 +389,16 @@ def extract_after_count(text: str) -> str | None:
     return None
 
 
-def transform_sql_to_parsed_beatdown(
-    sql_bd: SqlBeatDownModel,
-) -> ParsedBeatdown:
-    """Transform a SQL beatdown row into a fully parsed App BeatDown model."""
-    backblast = sql_bd.backblast or ''
+def _extract_ao_id(backblast: str) -> str:
+    """Extract AO ID from backblast content (e.g., AO: <#C04PD48V9KR>)."""
+    match = re.search(r'^AO:\s*<#([A-Z0-9]+)>', backblast, re.MULTILINE)
+    if match:
+        return match.group(1)
+    return ''
 
+
+def parse_backblast(backblast: str) -> ParsedBeatdown:
+    """Parse the backblast content into a ParsedBeatdown model."""
     # Extract basic content
     title = _extract_title(backblast)
 
@@ -407,12 +410,11 @@ def transform_sql_to_parsed_beatdown(
 
     # Compute analytics
     bd_date = extract_bd_date(backblast)
+    ao_id = _extract_ao_id(backblast)
     analytics = _compute_simple_analytics(backblast, bd_date)
 
     return ParsedBeatdown(
-        ao_id=sql_bd.ao_id,
-        timestamp=sql_bd.timestamp or '',
-        last_edited=sql_bd.ts_edited,
+        ao_id=ao_id,
         raw_backblast=backblast,
         title=title,
         q_user_id=people.q_user_id,

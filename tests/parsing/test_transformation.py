@@ -5,8 +5,8 @@ from textwrap import dedent
 
 import pytest
 
-from f3_nation_data.models.sql.beatdown import SqlBeatDownModel
-from f3_nation_data.parsing.backblast import transform_sql_to_parsed_beatdown
+from f3_nation_data.models import SqlBeatDownModel
+from f3_nation_data.transform import transform_sql_to_beatdown_record
 
 
 @dataclass
@@ -102,11 +102,12 @@ def test_transform_sql_to_parsed_beatdown(tcase: TransformTestCase):
     )
 
     # Transform to parsed model
-    parsed_bd = transform_sql_to_parsed_beatdown(sql_bd)
+    record = transform_sql_to_beatdown_record(sql_bd)
+    parsed_bd = record.backblast
 
     # Verify core fields (convert datetime to string for comparison)
-    assert parsed_bd.timestamp == tcase.sql_timestamp
-    assert parsed_bd.last_edited == tcase.sql_ts_edited
+    assert record.timestamp == tcase.sql_timestamp
+    assert record.last_edited == tcase.sql_ts_edited
     assert parsed_bd.raw_backblast == tcase.sql_backblast
     assert parsed_bd.title == tcase.expected_title
     assert parsed_bd.q_user_id == tcase.expected_q_user_id
