@@ -1,16 +1,12 @@
+from .beatdown_record import BeatdownRecord
+from .parsed import ParsedBeatdown
 from .sql import Base, SqlAOModel, SqlBeatDownModel, SqlUserModel
 
 __all__ = [
-    # SQL models
     'Base',
+    'BeatdownRecord',
+    'ParsedBeatdown',
     'SqlAOModel',
     'SqlBeatDownModel',
     'SqlUserModel',
-    # App models (to be implemented)
-    # 'BeatdownModel',
-    # 'AOModel',
-    # 'UserModel',
-    # 'WorkoutTypeModel',
-    # 'RegionStatsModel',
-    # 'AttendanceStatsModel',
 ]

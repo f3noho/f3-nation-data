@@ -56,8 +56,6 @@ class ParsedBeatdown(BaseModel):
     """
 
     # core beatdown identifiers
-    timestamp: str
-    last_edited: str | None = None
     raw_backblast: str
     ao_id: str  # Added for analytics efficiency
 
@@ -85,3 +83,13 @@ class ParsedBeatdown(BaseModel):
     # Enhanced metadata and computed fields
     pax_count: int | None = None
     fng_count: int | None = None
+
+    def aggregate_unique_attendees(self: 'ParsedBeatdown') -> set[str]:
+        """Aggregate all unique attendees for a beatdown."""
+        return set().union(
+            set(self.pax or []),
+            set(self.non_registered_pax or []),
+            set(self.fngs or []),
+            {self.q_user_id} if self.q_user_id else set(),
+            set(self.coq_user_id or []),
+        )

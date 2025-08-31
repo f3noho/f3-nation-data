@@ -16,9 +16,11 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel
 
 from .fetch import fetch_sql_aos, fetch_sql_users
-from .models.parsed.beatdown import ParsedBeatdown
-from .models.sql.beatdown import SqlBeatDownModel
-from .parsing.backblast import transform_sql_to_parsed_beatdown
+from .models import (
+    ParsedBeatdown,
+    SqlBeatDownModel,
+)
+from .transform import transform_sql_to_beatdown_record
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -159,21 +161,6 @@ def _debug_backblast(
     print(info)  # noqa: T201
 
 
-def _get_all_posters(parsed: ParsedBeatdown) -> set[str]:
-    """Aggregate all unique attendees for a beatdown."""
-    sets_to_add = (
-        set(parsed.pax or []),
-        set(parsed.non_registered_pax or []),
-        set(parsed.fngs or []),
-        {parsed.q_user_id} if parsed.q_user_id else set(),
-        set(parsed.coq_user_id or []),
-    )
-    all_posters = set()
-    for s in sets_to_add:
-        all_posters.update(s)
-    return all_posters
-
-
 def analyze_ao_attendance(
     parsed_beatdowns: list[ParsedBeatdown],
     ao_mapping: dict[str, str],
@@ -181,7 +168,7 @@ def analyze_ao_attendance(
     """Analyze AO attendance statistics: total beatdowns, total posts, unique PAX."""
     ao_stats = defaultdict(lambda: AOStats(ao_name=''))
     for parsed in parsed_beatdowns:
-        all_posters = _get_all_posters(parsed)
+        all_posters = parsed.aggregate_unique_attendees()
         ao_name = ao_mapping.get(parsed.ao_id, parsed.ao_id)
         if not ao_stats[ao_name].ao_name:
             ao_stats[ao_name].ao_name = ao_name
@@ -268,7 +255,8 @@ def get_weekly_summary(
         Dictionary with summary statistics
     """
     # Parse all beatdowns once
-    parsed_beatdowns = [transform_sql_to_parsed_beatdown(bd) for bd in beatdowns]
+    beatdown_records = [transform_sql_to_beatdown_record(bd) for bd in beatdowns]
+    parsed_beatdowns = [record.backblast for record in beatdown_records]
     pax_counts = analyze_pax_attendance(parsed_beatdowns)
     ao_stats = analyze_ao_attendance(parsed_beatdowns, ao_mapping)
     ao_counts = {ao: stats.unique_pax_count() for ao, stats in ao_stats.items()}
@@ -339,7 +327,7 @@ def get_beatdown_details(
     Returns:
         Dictionary with beatdown details
     """
-    parsed = transform_sql_to_parsed_beatdown(beatdown)
+    parsed = transform_sql_to_beatdown_record(beatdown).backblast
     fngs = [fng.removeprefix('@') for fng in parsed.fngs or []]
 
     return BeatdownDetails(

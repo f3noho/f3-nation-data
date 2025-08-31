@@ -21,7 +21,7 @@ f3-weekly-report = "f3_nation_data.cli.weekly_report:main"
 [dependency-groups]
 dev = [
   "poethepoet>=0.37.0",
-  "tbelt>=0.0.2",
+  "tbelt>=0.0.3",
   "pytest>=8.0.0",
   "pytest-mock>=3.12.0",
   "pytest-cov>=4.0.0",
