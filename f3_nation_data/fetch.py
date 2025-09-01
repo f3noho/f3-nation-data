@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from f3_nation_data.models.sql.ao import SqlAOModel
 from f3_nation_data.models.sql.beatdown import SqlBeatDownModel
 from f3_nation_data.models.sql.user import SqlUserModel
-from f3_nation_data.utils.datetime_utils import to_unix_timestamp, from_unix_timestamp
+from f3_nation_data.utils.datetime_utils import to_unix_timestamp
 
 
 def _validate_datetime_tz_aware(dt: datetime) -> None:
@@ -27,33 +27,6 @@ def _validate_datetime_tz_aware(dt: datetime) -> None:
     if dt.tzinfo is None:
         msg = 'datetime object must be timezone-aware'
         raise ValueError(msg)
-
-
-def _datetime_to_timestamp(dt: datetime) -> str:
-    """Convert a datetime object to Unix timestamp string format used by the database.
-
-    This ensures consistent timestamp format across all database operations.
-    The database stores timestamps as Unix timestamps in string format.
-
-    Args:
-        dt: Datetime object to convert
-
-    Returns:
-        Unix timestamp as string (e.g., "1710009857.949729")
-    """
-    return str(to_unix_timestamp(dt))
-
-
-def _timestamp_to_datetime(timestamp_str: str) -> datetime:
-    """Convert a Unix timestamp string back to a datetime object.
-
-    Args:
-        timestamp_str: Unix timestamp as string (e.g., "1710009857.949729")
-
-    Returns:
-        Corresponding datetime object
-    """
-    return from_unix_timestamp(timestamp_str)  # type: ignore[return-value]
 
 
 def fetch_sql_beatdowns(
@@ -78,7 +51,7 @@ def fetch_sql_beatdowns(
 
     if after_timestamp:
         _validate_datetime_tz_aware(after_timestamp)
-        after_timestamp_str = _datetime_to_timestamp(after_timestamp)
+        after_timestamp_str = str(to_unix_timestamp(after_timestamp))
         query = query.where(
             (SqlBeatDownModel.timestamp > after_timestamp_str)
             | ((SqlBeatDownModel.ts_edited.is_not(None)) & (SqlBeatDownModel.ts_edited > after_timestamp_str)),
@@ -107,7 +80,7 @@ def fetch_beatdowns_for_week(
         List of SqlBeatDownModel instances for the week containing the given date.
     """
     _validate_datetime_tz_aware(date_in_week)
-    
+
     # Calculate the Monday of the week containing the given date
     # weekday() returns 0=Monday, 1=Tuesday, etc.
     days_since_monday = date_in_week.weekday()
@@ -139,10 +112,10 @@ def fetch_beatdowns_for_date_range(
     """
     _validate_datetime_tz_aware(start_date)
     _validate_datetime_tz_aware(end_date)
-    
+
     # Convert datetime objects to Unix timestamps (as strings) to match database format
-    start_timestamp = _datetime_to_timestamp(start_date)
-    end_timestamp = _datetime_to_timestamp(end_date)
+    start_timestamp = str(to_unix_timestamp(start_date))
+    end_timestamp = str(to_unix_timestamp(end_date))
 
     query = sa.select(SqlBeatDownModel).where(
         (SqlBeatDownModel.timestamp >= start_timestamp) & (SqlBeatDownModel.timestamp < end_timestamp),
