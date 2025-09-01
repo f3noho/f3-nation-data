@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 
 from .parsed.beatdown import ParsedBeatdown
 
@@ -8,5 +9,5 @@ class BeatdownRecord:
     """Complete beatdown record for external sync, including parsed data and metadata."""
 
     backblast: ParsedBeatdown
-    timestamp: str
-    last_edited: str | None = None
+    timestamp: datetime
+    last_edited: datetime | None = None

@@ -30,8 +30,8 @@ class TransformTestCase:
     'tcase',
     [
         TransformTestCase(
-            sql_timestamp='2024-03-09T10:00:00',
-            sql_ts_edited='2024-03-09T11:00:00',
+            sql_timestamp='1710009600.0',  # 2024-03-09T10:00:00 UTC
+            sql_ts_edited='1710013200.0',  # 2024-03-09T11:00:00 UTC
             sql_backblast=dedent("""
                 Backblast! Standard Beatdown
                 DATE: 2024-03-09
@@ -59,8 +59,8 @@ class TransformTestCase:
             test_id='complete_beatdown',
         ),
         TransformTestCase(
-            sql_timestamp='2024-03-10T08:00:00',
-            sql_ts_edited='2024-03-10T08:30:00',
+            sql_timestamp='1710096000.0',  # 2024-03-10T08:00:00 UTC
+            sql_ts_edited='1710097800.0',  # 2024-03-10T08:30:00 UTC
             sql_backblast=dedent("""
                 Backblast! Minimal Data
                 Q: <@U123456>
@@ -79,8 +79,8 @@ class TransformTestCase:
             test_id='minimal_data',
         ),
         TransformTestCase(
-            sql_timestamp='2024-03-11T06:00:00',
-            sql_ts_edited='2024-03-11T06:15:00',
+            sql_timestamp='1710182400.0',  # 2024-03-11T06:00:00 UTC
+            sql_ts_edited='1710183300.0',  # 2024-03-11T06:15:00 UTC
             sql_backblast='',
             expected_title=None,
             expected_q_user_id=None,
@@ -94,8 +94,8 @@ class TransformTestCase:
             test_id='empty_backblast',
         ),
         TransformTestCase(
-            sql_timestamp='2025-08-26T05:30:00',
-            sql_ts_edited='2025-08-26T06:00:00',
+            sql_timestamp='1756051800.0',  # 2025-08-26T05:30:00 UTC
+            sql_ts_edited='1756053600.0',  # 2025-08-26T06:00:00 UTC
             sql_backblast=dedent("""
                 Backblast: DORA travels to Argentina!
                 Date: 2025-08-26
@@ -120,8 +120,8 @@ class TransformTestCase:
             test_id='where_field_ao_extraction',
         ),
         TransformTestCase(
-            sql_timestamp='2024-03-12T07:00:00',
-            sql_ts_edited='2024-03-12T07:30:00',
+            sql_timestamp='1710268800.0',  # 2024-03-12T07:00:00 UTC
+            sql_ts_edited='1710270600.0',  # 2024-03-12T07:30:00 UTC
             sql_backblast=dedent("""
                 Backblast: Morning Beatdown
                 AO: <#C04PD48V9KR>
@@ -157,9 +157,13 @@ def test_transform_sql_to_parsed_beatdown(tcase: TransformTestCase):
     record = transform_sql_to_beatdown_record(sql_bd)
     parsed_bd = record.backblast
 
-    # Verify core fields (convert datetime to string for comparison)
-    assert record.timestamp == tcase.sql_timestamp
-    assert record.last_edited == tcase.sql_ts_edited
+    # Verify core fields (convert datetime to Unix timestamp for comparison)
+    assert record.timestamp.timestamp() == float(tcase.sql_timestamp)
+    if tcase.sql_ts_edited:
+        assert record.last_edited is not None
+        assert record.last_edited.timestamp() == float(tcase.sql_ts_edited)
+    else:
+        assert record.last_edited is None
     assert parsed_bd.raw_backblast == tcase.sql_backblast
     assert parsed_bd.title == tcase.expected_title
     assert parsed_bd.q_user_id == tcase.expected_q_user_id

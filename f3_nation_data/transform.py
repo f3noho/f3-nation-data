@@ -1,5 +1,8 @@
+import datetime as dt
+
 from f3_nation_data.models import BeatdownRecord, SqlBeatDownModel
 from f3_nation_data.parsing.backblast import parse_backblast
+from f3_nation_data.utils.datetime_utils import from_unix_timestamp
 
 
 def transform_sql_to_beatdown_record(
@@ -21,6 +24,6 @@ def transform_sql_to_beatdown_record(
 
     return BeatdownRecord(
         backblast=parsed_bd,
-        timestamp=sql_bd.timestamp or '',
-        last_edited=sql_bd.ts_edited,
+        timestamp=from_unix_timestamp(sql_bd.timestamp) or dt.datetime.now(dt.UTC),
+        last_edited=from_unix_timestamp(sql_bd.ts_edited),
     )
