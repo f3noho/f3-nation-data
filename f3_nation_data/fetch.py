@@ -51,10 +51,13 @@ def fetch_sql_beatdowns(
 
     if after_timestamp:
         _validate_datetime_tz_aware(after_timestamp)
-        after_timestamp_str = str(to_unix_timestamp(after_timestamp))
+        after_unix = to_unix_timestamp(after_timestamp)
         query = query.where(
-            (SqlBeatDownModel.timestamp > after_timestamp_str)
-            | ((SqlBeatDownModel.ts_edited.is_not(None)) & (SqlBeatDownModel.ts_edited > after_timestamp_str)),
+            (sa.cast(SqlBeatDownModel.timestamp, sa.Float) > after_unix)
+            | (
+                (SqlBeatDownModel.ts_edited.is_not(None))
+                & (sa.cast(SqlBeatDownModel.ts_edited, sa.Float) > after_unix)
+            ),
         )
 
     result = session.execute(query)
@@ -113,12 +116,13 @@ def fetch_beatdowns_for_date_range(
     _validate_datetime_tz_aware(start_date)
     _validate_datetime_tz_aware(end_date)
 
-    # Convert datetime objects to Unix timestamps (as strings) to match database format
-    start_timestamp = str(to_unix_timestamp(start_date))
-    end_timestamp = str(to_unix_timestamp(end_date))
+    # Convert datetime objects to Unix timestamps
+    start_unix = to_unix_timestamp(start_date)
+    end_unix = to_unix_timestamp(end_date)
 
     query = sa.select(SqlBeatDownModel).where(
-        (SqlBeatDownModel.timestamp >= start_timestamp) & (SqlBeatDownModel.timestamp < end_timestamp),
+        (sa.cast(SqlBeatDownModel.timestamp, sa.Float) >= start_unix)
+        & (sa.cast(SqlBeatDownModel.timestamp, sa.Float) < end_unix),
     )
 
     result = session.execute(query)
