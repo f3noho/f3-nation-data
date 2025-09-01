@@ -61,7 +61,7 @@ def extract_pax_from_string(pax_string: str) -> tuple[list[str], list[str]]:
     """Extract valid Slack IDs and non-registered names from a PAX string.
 
     Args:
-        pax_string: String containing PAX information (comma-separated).
+        pax_string: String containing PAX information (comma or space separated).
 
     Returns:
         Tuple of (slack_ids, non_registered_names) lists with duplicates removed.
@@ -69,15 +69,39 @@ def extract_pax_from_string(pax_string: str) -> tuple[list[str], list[str]]:
     if not pax_string.strip():
         return [], []
 
-    normalized = re.sub(r'\s+', ' ', pax_string.strip()).replace(' <@', ',<@')
-    items = [item.strip() for item in normalized.split(',') if item.strip()]
+    # Normalize spaces
+    normalized = re.sub(r'\s+', ' ', pax_string.strip())
 
+    # Split items based on format
+    if ',' in normalized:
+        # Comma-separated format
+        normalized = normalized.replace(' <@', ',<@')
+        items = [item.strip() for item in normalized.split(',') if item.strip()]
+    else:
+        # Space-separated format
+        # Note: Most cases with mixed Slack IDs and names get normalized to comma-separated
+        # above due to the ' <@' -> ',<@' replacement. This branch typically handles:
+        # - Pure Slack ID lists: '<@U123> <@U456>'
+        # - Pure non-registered name lists: 'Dog Pound John' (treated as single multi-word name)
+        items = []
+        # Extract Slack IDs
+        slack_matches = re.findall(r'<@[A-Z0-9]+>', normalized)
+        items.extend(slack_matches)
+
+        # Extract non-Slack names
+        remaining = re.sub(r'<@[A-Z0-9]+>', '', normalized).strip()
+        if remaining:
+            # Treat the entire remaining as one potential multi-word name
+            # This handles cases like "Dog Pound" correctly, assuming that
+            # multiple non-registered names would use comma-separated format
+            items.append(remaining)
+
+    # Process items
     slack_ids, non_registered_names = [], []
     for item in items:
         slack_id = _is_slack_id(item)
-        if slack_id:
-            if slack_id not in slack_ids:
-                slack_ids.append(slack_id)
+        if slack_id and slack_id not in slack_ids:
+            slack_ids.append(slack_id)
         elif _is_valid_non_registered(item) and item not in non_registered_names:
             non_registered_names.append(item)
 
@@ -390,10 +414,17 @@ def extract_after_count(text: str) -> str | None:
 
 
 def _extract_ao_id(backblast: str) -> str:
-    """Extract AO ID from backblast content (e.g., AO: <#C04PD48V9KR>)."""
+    """Extract AO ID from backblast content (e.g., AO: <#C04PD48V9KR> or Where: <#C04PD48V9KR>)."""
+    # Try AO: pattern first (legacy format)
     match = re.search(r'^AO:\s*<#([A-Z0-9]+)>', backblast, re.MULTILINE)
     if match:
         return match.group(1)
+
+    # Try Where: pattern (new format)
+    match = re.search(r'^Where:\s*<#([A-Z0-9]+)>', backblast, re.MULTILINE)
+    if match:
+        return match.group(1)
+
     return ''
 
 

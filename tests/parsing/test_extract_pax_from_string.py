@@ -111,6 +111,13 @@ class PaxExtractionTestCase:
             ['Steubie', 'T-Bone'],
             'extra_whitespace_normalized',
         ),
+        # no commas but multi-word name
+        PaxExtractionTestCase(
+            '<@U123456789> Dog Pound',
+            ['U123456789'],
+            ['Dog Pound'],
+            'space_separated_with_multi_word_name',
+        )
     ],
     ids=lambda tcase: tcase.test_id,
 )
