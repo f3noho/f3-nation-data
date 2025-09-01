@@ -22,6 +22,7 @@ class TransformTestCase:
     expected_fngs: list[str]
     expected_bd_date: str | None
     expected_workout_type: str
+    expected_ao_id: str | None
     test_id: str
 
 
@@ -29,8 +30,8 @@ class TransformTestCase:
     'tcase',
     [
         TransformTestCase(
-            sql_timestamp='2024-03-09T10:00:00',
-            sql_ts_edited='2024-03-09T11:00:00',
+            sql_timestamp='1710009600.0',  # 2024-03-09T10:00:00 UTC
+            sql_ts_edited='1710013200.0',  # 2024-03-09T11:00:00 UTC
             sql_backblast=dedent("""
                 Backblast! Standard Beatdown
                 DATE: 2024-03-09
@@ -54,11 +55,12 @@ class TransformTestCase:
             expected_fngs=['John'],
             expected_bd_date='2024-03-09',
             expected_workout_type='bootcamp',
+            expected_ao_id='C04TYQEEGHM',  # From SQL model since backblast doesn't have AO
             test_id='complete_beatdown',
         ),
         TransformTestCase(
-            sql_timestamp='2024-03-10T08:00:00',
-            sql_ts_edited='2024-03-10T08:30:00',
+            sql_timestamp='1710096000.0',  # 2024-03-10T08:00:00 UTC
+            sql_ts_edited='1710097800.0',  # 2024-03-10T08:30:00 UTC
             sql_backblast=dedent("""
                 Backblast! Minimal Data
                 Q: <@U123456>
@@ -73,11 +75,12 @@ class TransformTestCase:
             expected_fngs=[],
             expected_bd_date=None,
             expected_workout_type='bootcamp',
+            expected_ao_id='C04TYQEEGHM',  # From SQL model
             test_id='minimal_data',
         ),
         TransformTestCase(
-            sql_timestamp='2024-03-11T06:00:00',
-            sql_ts_edited='2024-03-11T06:15:00',
+            sql_timestamp='1710182400.0',  # 2024-03-11T06:00:00 UTC
+            sql_ts_edited='1710183300.0',  # 2024-03-11T06:15:00 UTC
             sql_backblast='',
             expected_title=None,
             expected_q_user_id=None,
@@ -87,7 +90,56 @@ class TransformTestCase:
             expected_fngs=[],
             expected_bd_date=None,
             expected_workout_type='bootcamp',
+            expected_ao_id='C04TYQEEGHM',  # From SQL model
             test_id='empty_backblast',
+        ),
+        TransformTestCase(
+            sql_timestamp='1756051800.0',  # 2025-08-26T05:30:00 UTC
+            sql_ts_edited='1756053600.0',  # 2025-08-26T06:00:00 UTC
+            sql_backblast=dedent("""
+                Backblast: DORA travels to Argentina!
+                Date: 2025-08-26
+                Time: 05:30
+                Where: <#C08Q6RT19AQ>
+                Q: <@U08QZ8KPZEJ>
+                PAX: <@U098TJU4FT3> <@U06CYCFKHQQ> <@U09BYQMK4K0>
+                FNG: None
+                Count: 8
+
+                WARMUP
+            """).strip(),
+            expected_title='Backblast: DORA travels to Argentina!',
+            expected_q_user_id='U08QZ8KPZEJ',
+            expected_coq_user_id=None,
+            expected_pax=['U098TJU4FT3', 'U06CYCFKHQQ', 'U09BYQMK4K0'],
+            expected_non_registered_pax=[],
+            expected_fngs=[],
+            expected_bd_date='2025-08-26',
+            expected_workout_type='bootcamp',
+            expected_ao_id='C08Q6RT19AQ',  # Extracted from "Where:" field
+            test_id='where_field_ao_extraction',
+        ),
+        TransformTestCase(
+            sql_timestamp='1710268800.0',  # 2024-03-12T07:00:00 UTC
+            sql_ts_edited='1710270600.0',  # 2024-03-12T07:30:00 UTC
+            sql_backblast=dedent("""
+                Backblast: Morning Beatdown
+                AO: <#C04PD48V9KR>
+                Date: 2024-03-12
+                Q: <@U123456>
+                PAX: <@U111111>
+                COUNT: 2
+            """).strip(),
+            expected_title='Backblast: Morning Beatdown',
+            expected_q_user_id='U123456',
+            expected_coq_user_id=None,
+            expected_pax=['U111111'],
+            expected_non_registered_pax=[],
+            expected_fngs=[],
+            expected_bd_date='2024-03-12',
+            expected_workout_type='bootcamp',
+            expected_ao_id='C04PD48V9KR',  # Extracted from "AO:" field
+            test_id='ao_field_extraction',
         ),
     ],
     ids=lambda tcase: tcase.test_id,
@@ -105,9 +157,13 @@ def test_transform_sql_to_parsed_beatdown(tcase: TransformTestCase):
     record = transform_sql_to_beatdown_record(sql_bd)
     parsed_bd = record.backblast
 
-    # Verify core fields (convert datetime to string for comparison)
-    assert record.timestamp == tcase.sql_timestamp
-    assert record.last_edited == tcase.sql_ts_edited
+    # Verify core fields (convert datetime to Unix timestamp for comparison)
+    assert record.timestamp.timestamp() == float(tcase.sql_timestamp)
+    if tcase.sql_ts_edited:
+        assert record.last_edited is not None
+        assert record.last_edited.timestamp() == float(tcase.sql_ts_edited)
+    else:
+        assert record.last_edited is None
     assert parsed_bd.raw_backblast == tcase.sql_backblast
     assert parsed_bd.title == tcase.expected_title
     assert parsed_bd.q_user_id == tcase.expected_q_user_id
@@ -134,6 +190,7 @@ def test_transform_sql_to_parsed_beatdown(tcase: TransformTestCase):
     assert parsed_bd.fngs == tcase.expected_fngs
     assert parsed_bd.bd_date == tcase.expected_bd_date
     assert parsed_bd.workout_type == tcase.expected_workout_type
+    assert parsed_bd.ao_id == tcase.expected_ao_id
 
     # Verify derived fields exist and are correct types
     assert isinstance(parsed_bd.pax_count, int)

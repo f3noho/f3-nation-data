@@ -22,9 +22,10 @@ from f3_nation_data.analytics import (
     get_week_range,
     get_weekly_summary,
 )
-from f3_nation_data.fetch import _timestamp_to_datetime, fetch_sql_beatdowns
+from f3_nation_data.fetch import fetch_sql_beatdowns
 from f3_nation_data.models import ParsedBeatdown, SqlBeatDownModel
 from f3_nation_data.transform import transform_sql_to_beatdown_record
+from f3_nation_data.utils.datetime_utils import from_unix_timestamp
 
 
 def test_get_user_mapping(f3_test_database: Engine):
@@ -332,15 +333,18 @@ def test_date_parsing_error_handling():
 
 
 def test_timestamp_to_datetime():
-    """Test _timestamp_to_datetime function coverage."""
+    """Test from_unix_timestamp function coverage."""
     # Test with a valid timestamp string
-    timestamp_str = '1699555200.123456'  # Nov 9, 2023
-    result = _timestamp_to_datetime(timestamp_str)
+    timestamp_str = '1699531200.123456'  # Nov 9, 2023 12:00:00 UTC
+    result = from_unix_timestamp(timestamp_str)
 
     assert result is not None
     assert result.year == 2023
     assert result.month == 11
     assert result.day == 9
+    assert result.hour == 12
+    assert result.minute == 0
+    assert result.second == 0
 
 
 def test_analyze_highest_attendance_invalid_date():

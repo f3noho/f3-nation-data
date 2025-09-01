@@ -4,7 +4,7 @@ This module provides functions to query and fetch F3 data from SQL databases,
 with support for incremental syncing and time-based filtering.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
@@ -12,38 +12,26 @@ from sqlalchemy.orm import Session
 from f3_nation_data.models.sql.ao import SqlAOModel
 from f3_nation_data.models.sql.beatdown import SqlBeatDownModel
 from f3_nation_data.models.sql.user import SqlUserModel
+from f3_nation_data.utils.datetime_utils import to_unix_timestamp
 
 
-def _datetime_to_timestamp(dt: datetime) -> str:
-    """Convert a datetime object to Unix timestamp string format used by the database.
-
-    This ensures consistent timestamp format across all database operations.
-    The database stores timestamps as Unix timestamps in string format.
+def _validate_datetime_tz_aware(dt: datetime) -> None:
+    """Validate that a datetime object is timezone-aware.
 
     Args:
-        dt: Datetime object to convert
+        dt: Datetime object to validate
 
-    Returns:
-        Unix timestamp as string (e.g., "1710009857.949729")
+    Raises:
+        ValueError: If the datetime object is not timezone-aware
     """
-    return str(dt.timestamp())
-
-
-def _timestamp_to_datetime(timestamp_str: str) -> datetime:
-    """Convert a Unix timestamp string back to a datetime object.
-
-    Args:
-        timestamp_str: Unix timestamp as string (e.g., "1710009857.949729")
-
-    Returns:
-        Corresponding datetime object
-    """
-    return datetime.fromtimestamp(float(timestamp_str), tz=UTC)
+    if dt.tzinfo is None:
+        msg = 'datetime object must be timezone-aware'
+        raise ValueError(msg)
 
 
 def fetch_sql_beatdowns(
     session: Session,
-    after_timestamp: str | None = None,
+    after_timestamp: datetime | None = None,
 ) -> list[SqlBeatDownModel]:
     """Fetch BeatDown data from the SQL database.
 
@@ -54,6 +42,7 @@ def fetch_sql_beatdowns(
         session: SQLAlchemy Session for the query.
         after_timestamp: If provided, only fetch BeatDowns with timestamp
             greater than this value, or with ts_edited greater than this value.
+            Must be a timezone-aware datetime object.
 
     Returns:
         List of SqlBeatDownModel instances with essential data.
@@ -61,9 +50,14 @@ def fetch_sql_beatdowns(
     query = sa.select(SqlBeatDownModel)
 
     if after_timestamp:
+        _validate_datetime_tz_aware(after_timestamp)
+        after_unix = to_unix_timestamp(after_timestamp)
         query = query.where(
-            (SqlBeatDownModel.timestamp > after_timestamp)
-            | ((SqlBeatDownModel.ts_edited.is_not(None)) & (SqlBeatDownModel.ts_edited > after_timestamp)),
+            (sa.cast(SqlBeatDownModel.timestamp, sa.Float) > after_unix)
+            | (
+                (SqlBeatDownModel.ts_edited.is_not(None))
+                & (sa.cast(SqlBeatDownModel.ts_edited, sa.Float) > after_unix)
+            ),
         )
 
     result = session.execute(query)
@@ -83,10 +77,13 @@ def fetch_beatdowns_for_week(
         session: SQLAlchemy Session for the query.
         date_in_week: Any date within the desired week. The function will
             calculate the full week (Monday to Sunday) containing this date.
+            Must be a timezone-aware datetime object.
 
     Returns:
         List of SqlBeatDownModel instances for the week containing the given date.
     """
+    _validate_datetime_tz_aware(date_in_week)
+
     # Calculate the Monday of the week containing the given date
     # weekday() returns 0=Monday, 1=Tuesday, etc.
     days_since_monday = date_in_week.weekday()
@@ -110,18 +107,22 @@ def fetch_beatdowns_for_date_range(
 
     Args:
         session: SQLAlchemy Session for the query.
-        start_date: Start of the date range (inclusive).
-        end_date: End of the date range (exclusive).
+        start_date: Start of the date range (inclusive). Must be timezone-aware.
+        end_date: End of the date range (exclusive). Must be timezone-aware.
 
     Returns:
         List of SqlBeatDownModel instances within the date range.
     """
-    # Convert datetime objects to Unix timestamps (as strings) to match database format
-    start_timestamp = _datetime_to_timestamp(start_date)
-    end_timestamp = _datetime_to_timestamp(end_date)
+    _validate_datetime_tz_aware(start_date)
+    _validate_datetime_tz_aware(end_date)
+
+    # Convert datetime objects to Unix timestamps
+    start_unix = to_unix_timestamp(start_date)
+    end_unix = to_unix_timestamp(end_date)
 
     query = sa.select(SqlBeatDownModel).where(
-        (SqlBeatDownModel.timestamp >= start_timestamp) & (SqlBeatDownModel.timestamp < end_timestamp),
+        (sa.cast(SqlBeatDownModel.timestamp, sa.Float) >= start_unix)
+        & (sa.cast(SqlBeatDownModel.timestamp, sa.Float) < end_unix),
     )
 
     result = session.execute(query)
