@@ -117,7 +117,7 @@ class PaxExtractionTestCase:
             ['U123456789'],
             ['Dog Pound'],
             'space_separated_with_multi_word_name',
-        )
+        ),
     ],
     ids=lambda tcase: tcase.test_id,
 )
